@@ -62,7 +62,7 @@ public class PantallaPartida implements Screen {
 
     private boolean debeVolverAlMenu = false;
     private HiloServidor hs;
-
+    private int mano = 0;
 
     public PantallaPartida(Game game) {
         this.game = game;
@@ -144,7 +144,7 @@ public class PantallaPartida implements Screen {
         );
 
         partida.inicializar(zonaJuegoJugador, zonaJuegoRival, rivalBot,
-                jugadores.get(0), jugadores.get(1), hs);
+                jugadores.get(0), jugadores.get(1),mano);
 
         rivalBot.setPartida(partida);
 

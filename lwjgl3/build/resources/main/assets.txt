@@ -1,0 +1,19 @@
+fondos/fondo.png
+fondos/fondoMontaña.png
+fondos/fondoOpciones.png
+fondos/fondoPartida.png
+fondos/pepi.png
+fuentes/dungeon.ttf
+fuentes/medieval.ttf
+libgdx.png
+sounds/Grabación (31).wav
+sounds/carta.wav
+sounds/fuego.mp3
+sprites/Baraja2.png
+sprites/baraja.png
+sprites/btn_jugar.png
+sprites/casilla.png
+sprites/dorso.PNG
+sprites/dorsoM.png
+sprites/marcoCarta.png
+sprites/mazo_sprite.png

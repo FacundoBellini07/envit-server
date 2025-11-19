@@ -4,30 +4,28 @@ import juego.elementos.Carta;
 
 public class Jugador {
     private String nombre;
+    private int puntos = 0;
     private Carta mano[] = new Carta[3];
     private int cantCartas = 0;
 
-    // ✅ NUEVO: Puntos de la ronda actual (antes de sumarlos al total)
-
-
-    public Jugador() {
-        this.nombre = "Jugador";
-    }
-
     public Jugador(String nombre) {
         this.nombre = nombre;
+        this.puntos = 0;
     }
 
     public String getNombre() {
         return nombre;
     }
 
-    public void setNombre(String nombre) {
-        this.nombre = nombre;
-    }
+
 
     public Carta[] getMano() {
         return mano;
+    }
+
+
+    public void sumarPuntos(int cantidad) {
+        this.puntos += cantidad;
     }
 
 
@@ -44,6 +42,9 @@ public class Jugador {
             mano[i] = null;
         }
         cantCartas = 0;
+    }
+ public int getPuntos() {
+        return puntos;
     }
 
 }
