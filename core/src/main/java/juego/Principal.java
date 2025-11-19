@@ -2,8 +2,7 @@ package juego;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import juego.pantallas.PantallaMenu;
-import juego.pantallas.PantallaPartida;
+import juego.pantallas.PantallaServidor;
 
 public class Principal extends Game {
 
@@ -12,7 +11,7 @@ public class Principal extends Game {
 	@Override
 	public void create() {
 		batch = new SpriteBatch();
-		setScreen(new PantallaPartida(this));
+		setScreen(new PantallaServidor(this));
 	}
 
 	@Override

@@ -3,6 +3,7 @@ package juego.pantallas;
 import juego.elementos.*;
 import juego.personajes.Jugador;
 import juego.personajes.RivalBot;
+import juego.personajes.TipoJugador;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,9 +14,8 @@ public class Partida {
     private ArrayList<Carta> mazoRevuelto = new ArrayList<>();
     private int indiceMazo = 0;
 
-    public enum TipoJugador { JUGADOR_1, JUGADOR_2 }
 
-    private enum EstadoTurno { ESPERANDO_JUGADOR_1, ESPERANDO_JUGADOR_2, FINALIZANDO_MANO, PARTIDA_TERMINADA }
+
     private EstadoTurno estadoActual;
 
     private final int PUNTOS_PARA_GANAR = 15;
@@ -45,6 +45,7 @@ public class Partida {
     private TipoJugador jugadorQueCanto = null;
 
     public Partida() {
+        this.estadoActual = EstadoTurno.ESPERANDO_JUGADOR_1;
         Mazo mazoOriginal = new Mazo();
         for (int i = 0; i < mazoOriginal.getCantCartas(); i++) {
             mazoRevuelto.add(mazoOriginal.getCarta(i));
@@ -360,8 +361,109 @@ public class Partida {
     public boolean isTrucoActivoEnManoActual() {
         return trucoUsado && manoTrucoUsada == manoActual;
     }
+    public void procesarJugadaServidor(TipoJugador jugadorQueJugo, int valor, Palo palo) {
+        Carta carta = new Carta(valor, palo);
+        if (jugadorQueJugo == TipoJugador.JUGADOR_1) {
+            zonaJugador1.agregarCarta(carta);
+            cartasJugador1Antes = zonaJugador1.getCantidadCartas();
+        } else {
+            zonaJugador2.agregarCarta(carta);
+            cartasJugador2Antes = zonaJugador2.getCantidadCartas();
+        }
 
-    public int getManoTrucoUsada() {
-        return manoTrucoUsada;
+        // 3. Verificar lógica de turno (copiada y adaptada de tu update)
+        if (cartasJugador1Antes == cartasJugador2Antes) {
+            // Ambos jugaron, fin de la mano actual
+            manoActual++;
+
+            evaluarRonda();
+
+            if (manoActual >= MAX_MANOS || ganador != null) {
+                estadoActual = EstadoTurno.PARTIDA_TERMINADA; // O finalizando
+            } else {
+                // Siguiente mano
+                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
+                        ? EstadoTurno.ESPERANDO_JUGADOR_1
+                        : EstadoTurno.ESPERANDO_JUGADOR_2;
+            }
+        } else {
+            // Falta que juegue el otro
+            estadoActual = (jugadorQueJugo == TipoJugador.JUGADOR_1)
+                    ? EstadoTurno.ESPERANDO_JUGADOR_2
+                    : EstadoTurno.ESPERANDO_JUGADOR_1;
+        }
     }
+
+    // Necesitas getters para que el servidor pueda leer el estado y enviarlo
+    public int getPuntosJ1() { return jugador1.getPuntos(); }
+    public int getPuntosJ2() { return jugador2.getPuntos(); }
+
+    public EstadoTurno getEstadoActual() {
+        return estadoActual;
+    }
+    public TipoJugador getJugadorMano() {
+        return jugadorMano;
+    }
+    public void jugarCarta(TipoJugador jugadorQueJugo, Carta carta) {
+        if (ganador != null) return;
+
+        // 1. Agregar carta a la zona de juego y actualizar contadores
+        if (jugadorQueJugo == TipoJugador.JUGADOR_1) {
+            zonaJugador1.agregarCarta(carta);
+            cartasJugador1Antes++; // 1 carta jugada por J1
+        } else {
+            zonaJugador2.agregarCarta(carta);
+            cartasJugador2Antes++; // 1 carta jugada por J2
+        }
+
+        // 2. Lógica de Cambio de Turno / Fin de Mano
+        if (cartasJugador1Antes == cartasJugador2Antes) {
+            // **********************************************
+            // AMBOS JUGARON UNA CARTA: FIN DE MANO
+            // **********************************************
+
+            System.out.println("[PARTIDA] Fin de la mano " + (manoActual + 1) + ". Evaluando...");
+
+            // Llamar a la lógica de puntuación y ganadores de mano
+            // (Debes asegurar que 'evaluarRonda()' existe y funciona)
+            evaluarRonda();
+
+            // Resetear contadores y limpiar mesa visualmente
+            cartasJugador1Antes = 0;
+            cartasJugador2Antes = 0;
+            zonaJugador1.limpiar();
+            zonaJugador2.limpiar();
+
+            manoActual++;
+
+            if (manoActual >= MAX_MANOS || jugador1.getPuntos() >= PUNTOS_PARA_GANAR || jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
+                // FIN DE PARTIDA
+                estadoActual = EstadoTurno.PARTIDA_TERMINADA;
+                // Lógica para determinar el ganador final
+                if (jugador1.getPuntos() > jugador2.getPuntos()) ganador = jugador1;
+                else if (jugador2.getPuntos() > jugador1.getPuntos()) ganador = jugador2;
+
+                System.out.println("[PARTIDA] Partida terminada. Ganador: " + (ganador != null ? ganador.getNombre() : "Empate"));
+
+            } else {
+                // AVANZAR A LA SIGUIENTE MANO: Vuelve a empezar quien es 'jugadorMano' (o quien ganó la mano anterior)
+                // Asumo que el ganador de la mano anterior establece el nuevo 'jugadorMano' en evaluarRonda().
+                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
+                        ? EstadoTurno.ESPERANDO_JUGADOR_1
+                        : EstadoTurno.ESPERANDO_JUGADOR_2;
+                System.out.println("[PARTIDA] Empezando mano " + (manoActual + 1) + ". Turno de: " + estadoActual);
+            }
+        } else {
+            // **********************************************
+            // SOLO JUGÓ UNO: CAMBIO DE TURNO
+            // **********************************************
+            estadoActual = (jugadorQueJugo == TipoJugador.JUGADOR_1)
+                    ? EstadoTurno.ESPERANDO_JUGADOR_2 // Cambia el turno al J2
+                    : EstadoTurno.ESPERANDO_JUGADOR_1; // Cambia el turno al J1
+
+            System.out.println("[PARTIDA] Carta jugada. Turno de: " + estadoActual);
+        }
+    }
+
+
 }

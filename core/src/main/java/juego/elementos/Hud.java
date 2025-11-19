@@ -5,7 +5,6 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import juego.personajes.Jugador;
-import juego.utilidades.Global;
 
 /**
  * HUD (Heads-Up Display) que muestra información de la partida:
@@ -92,7 +91,7 @@ public class Hud {
         font.setColor(colorJugador);
         font.getData().setScale(1.5f);
 
-        String textoJugador = "TU: " + Global.puntosJ1 + " pts";
+        String textoJugador = "TU: " + jugador.getPuntos() + " pts";
 
         float x = margen;
         float y = margen + 30;
@@ -104,7 +103,7 @@ public class Hud {
         font.setColor(colorRival);
         font.getData().setScale(1.5f);
 
-        String textoRival = "RIVAL: " + Global.puntosJ2 + " pts";
+        String textoRival = "RIVAL: " + rival.getPuntos() + " pts";
 
         float x = margen;
         float y = worldHeight - margen;

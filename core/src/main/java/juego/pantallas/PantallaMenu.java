@@ -307,7 +307,7 @@ public class PantallaMenu implements Screen {
 
     private void startGame() {
         // Cambia a la pantalla de partida
-        game.setScreen(new PantallaPartida(game));
+        game.setScreen(new PantallaServidor(game));
     }
 
     private void cargarMusicaFondo() {

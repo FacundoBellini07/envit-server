@@ -1,5 +1,12 @@
 package juego.red;
-import juego.utilidades.Global;
+import juego.elementos.Carta;
+import juego.elementos.EstadoTurno;
+import juego.elementos.Palo;
+import juego.elementos.ZonaJuego;
+import juego.pantallas.Partida;
+import juego.personajes.Jugador;
+import juego.personajes.TipoJugador;
+
 import java.io.IOException;
 import java.net.*;
 
@@ -9,7 +16,12 @@ public class HiloServidor extends Thread {
     private Cliente[] clientes = new Cliente[2];
     private int cantClientes = 0;
 
-    public HiloServidor() {
+    private Partida partidaLogica;
+    private Jugador srvJugador1;
+    private Jugador srvJugador2;
+
+    public HiloServidor(Partida partida) {
+        this.partidaLogica = partida;
         try {
             conexion = new DatagramSocket(30243);
             System.out.println("[SERVIDOR] Escuchando en puerto 30243");
@@ -29,7 +41,6 @@ public class HiloServidor extends Thread {
         }
     }
 
-    // NUEVO: Enviar a ambos clientes
     public void enviarAmbos(String mensaje) {
         if (cantClientes >= 2) {
             enviarMensaje(mensaje, clientes[0].getIp(), clientes[0].getPuerto());
@@ -64,8 +75,17 @@ public class HiloServidor extends Thread {
                 System.out.println("[SERVIDOR] Cliente conectado. Total: " + cantClientes);
 
                 if (cantClientes == 2) {
-                    Global.empieza = true;
-                    enviarAmbos("Empieza");
+
+                    // 1. Obtener quién empieza según la partida del servidor
+                    TipoJugador quienEmpieza = partidaLogica.getJugadorMano();
+
+                    // 2. Convertirlo a número (0 = J1, 1 = J2)
+                    int idEmpieza = (quienEmpieza == TipoJugador.JUGADOR_1) ? 0 : 1;
+
+                    // 3. Enviar el mensaje con el dato: "EMPIEZA:0" o "EMPIEZA:1"
+                    enviarAmbos("EMPIEZA:" + idEmpieza);
+
+                    enviarEstadoActual();
                 }
             }
         }
@@ -82,21 +102,32 @@ public class HiloServidor extends Thread {
     private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
         String[] partes = mensaje.split(":");
         if (partes.length >= 3) {
-            String valor = partes[1];
-            String palo  = partes[2];
+            int valor = Integer.parseInt(partes[1]); // Parsear a int
+            Palo palo = Palo.valueOf(partes[2]);     // Parsear a Enum
 
             System.out.println("[SERVIDOR] Carta jugada: " + valor + " de " + palo);
 
             int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
             if (idx == -1) return;
 
+            TipoJugador jugadorQueJugo = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+
+            // Si partidaLogica es null, evitamos error, aunque no debería serlo
+            if (partidaLogica != null) {
+                partidaLogica.procesarJugadaServidor(jugadorQueJugo, valor, palo);
+            }
+
+            Carta cartaJugada = new Carta(valor, palo);
+            partidaLogica.jugarCarta(jugadorQueJugo, cartaJugada);
+
             int rival = (idx == 0) ? 1 : 0;
 
             enviarMensaje(
-                    "CARTA_RIVAL:" + valor + ":" + palo,
+                    "CARTA_RIVAL:" + valor + ":" + palo.name(),
                     clientes[rival].getIp(),
                     clientes[rival].getPuerto()
             );
+
 
             enviarEstadoActual();
         }
@@ -105,13 +136,25 @@ public class HiloServidor extends Thread {
     private void procesarTruco(DatagramPacket dp) {
         System.out.println("[SERVIDOR] TRUCO cantado");
 
-
         enviarEstadoActual();
     }
 
     private void enviarEstadoActual() {
-        String estado = "ESTADO:"+Global.manoActual +":"+Global.puntosJ1+ ":"+ Global.puntosJ2+ ":"+Global.estadoTurno;
-        enviarAmbos(estado);
+        if (partidaLogica == null) return; // O partidaLogica, como la hayas llamado
+
+        // 1. Obtener el estado de forma segura
+        EstadoTurno estado = partidaLogica.getEstadoActual();
+        String nombreEstado = estado.name();
+        String jugadorManoStr = partidaLogica.getJugadorMano().name();
+        // 2. Construir el mensaje usando nombreEstado
+        String mensaje = "ESTADO:" +
+                partidaLogica.getManoActual() + ":" +
+                partidaLogica.getPuntosJ1() + ":" +
+                partidaLogica.getPuntosJ2() + ":" +
+                nombreEstado + ":"
+                + jugadorManoStr;
+
+        enviarAmbos(mensaje);
     }
     private int getIndiceCliente(InetAddress ip, int puerto) {
         for (int i = 0; i < cantClientes; i++) {

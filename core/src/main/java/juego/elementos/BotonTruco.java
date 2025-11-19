@@ -11,6 +11,7 @@ import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import juego.pantallas.Partida;
+import juego.personajes.TipoJugador;
 
 /**
  * Botón visual para cantar Truco en el juego
@@ -65,11 +66,7 @@ public class BotonTruco {
      * Dibuja el botón
      */
     public void render(SpriteBatch batch, ShapeRenderer shapeRenderer) {
-        // ✅ NUEVO: El botón solo está disponible si:
-        // 1. No se usó el truco aún
-        // 2. Es el primer turno de la mano
-        // 3. Es el turno del jugador 1
-        // 4. El jugador 1 es quien empieza esta mano
+
         boolean trucoDisponible = !partida.isTrucoUsado()
                 && partida.esPrimerTurnoEnMano()
                 && partida.esTurnoJugador()
@@ -185,7 +182,7 @@ public class BotonTruco {
     }
 
     private boolean intentarCantarTruco() {
-        boolean exito = partida.cantarTruco(Partida.TipoJugador.JUGADOR_1);
+        boolean exito = partida.cantarTruco(TipoJugador.JUGADOR_1);
 
         if (exito) {
             System.out.println("¡TRUCO cantado por el jugador!");

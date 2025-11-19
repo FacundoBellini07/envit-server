@@ -146,7 +146,7 @@ public class RivalBot {
 
         // El bot tiene una probabilidad de cantar truco
         if (random.nextFloat() < PROBABILIDAD_TRUCO) {
-            boolean exito = partida.cantarTruco(Partida.TipoJugador.JUGADOR_2);
+            boolean exito = partida.cantarTruco(TipoJugador.JUGADOR_2);
             if (exito) {
                 System.out.println("¡El BOT cantó TRUCO!");
             }

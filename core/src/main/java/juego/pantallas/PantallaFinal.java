@@ -11,7 +11,6 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import juego.personajes.Jugador;
-import juego.utilidades.Global;
 
 /**
  * Pantalla de fin de partida que muestra el resultado final
@@ -158,8 +157,8 @@ public class PantallaFinal {
         font.setColor(Color.WHITE);
         font.getData().setScale(1.5f);
 
-        String puntuacion = jugador1.getNombre() + ": " + Global.puntosJ1 +
-                " - " + jugador2.getNombre() + ": " + Global.puntosJ2;
+        String puntuacion = jugador1.getNombre() + ": " + jugador1.getPuntos() +
+                " - " + jugador2.getNombre() + ": " + jugador2.getPuntos();
 
         GlyphLayout layout = new GlyphLayout(font, puntuacion);
 
