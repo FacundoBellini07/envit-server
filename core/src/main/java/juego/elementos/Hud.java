@@ -5,6 +5,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import juego.personajes.Jugador;
+import juego.utilidades.Global;
 
 /**
  * HUD (Heads-Up Display) que muestra información de la partida:
@@ -87,41 +88,30 @@ public class Hud {
         batch.end();
     }
 
-    /**
-     * Dibuja los puntos del jugador
-     */
     private void dibujarPuntosJugador(SpriteBatch batch) {
         font.setColor(colorJugador);
         font.getData().setScale(1.5f);
 
-        String textoJugador = "TU: " + jugador.getPuntos() + " pts";
+        String textoJugador = "TU: " + Global.puntosJ1 + " pts";
 
-        // Abajo izquierda
         float x = margen;
         float y = margen + 30;
 
         font.draw(batch, textoJugador, x, y);
     }
 
-    /**
-     * Dibuja los puntos del rival
-     */
     private void dibujarPuntosRival(SpriteBatch batch) {
         font.setColor(colorRival);
         font.getData().setScale(1.5f);
 
-        String textoRival = "RIVAL: " + rival.getPuntos() + " pts";
+        String textoRival = "RIVAL: " + Global.puntosJ2 + " pts";
 
-        // Arriba izquierda
         float x = margen;
         float y = worldHeight - margen;
 
         font.draw(batch, textoRival, x, y);
     }
 
-    /**
-     * Dibuja la información de la mano actual
-     */
     private void dibujarInfoMano(SpriteBatch batch, int manoActual) {
         if (manoActual < 0 || manoActual > 2) {
             return; // No mostrar si no hay mano en curso

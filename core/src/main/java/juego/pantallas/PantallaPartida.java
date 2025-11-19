@@ -15,7 +15,7 @@ import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import juego.elementos.*;
 import juego.personajes.Jugador;
 import juego.personajes.RivalBot;
-import juego.red.HiloServidor;
+import juego.red.HiloCliente;
 import juego.utilidades.Global;
 
 import java.util.ArrayList;
@@ -55,15 +55,14 @@ public class PantallaPartida implements Screen {
 
     private final float CARTA_ANCHO = WORLD_WIDTH * CARTA_PROPORCION_ANCHO;
     private final float CARTA_ALTO = CARTA_ANCHO * CARTA_RELACION_ASPECTO;
-    private int mano;
 
     private PantallaFinal pantallaFinal;
 
     private BotonTruco botonTruco;
 
     private boolean debeVolverAlMenu = false;
+    private HiloCliente hc;
 
-    private HiloServidor hs;
 
     public PantallaPartida(Game game) {
         this.game = game;
@@ -145,13 +144,12 @@ public class PantallaPartida implements Screen {
         );
 
         partida.inicializar(zonaJuegoJugador, zonaJuegoRival, rivalBot,
-                jugadores.get(0), jugadores.get(1), mano);
+                jugadores.get(0), jugadores.get(1));
 
         rivalBot.setPartida(partida);
 
         Gdx.input.setInputProcessor(manoManager.getInputMultiplexer());
 
-        // ✅ REFACTORIZADO: Inicializar botón de Truco
         float btnTrucoAncho = 80f;
         float btnTrucoAlto = 60f;
         float margenIzq = 20f;
@@ -164,10 +162,10 @@ public class PantallaPartida implements Screen {
                 btnTrucoAlto,
                 font,
                 viewport,
-                partida
+                partida,
+                hc
         );
 
-        // ✅ REFACTORIZADO: Inicializar pantalla final
         pantallaFinal = new PantallaFinal(
                 font,
                 viewport,
@@ -175,18 +173,21 @@ public class PantallaPartida implements Screen {
                 WORLD_WIDTH,
                 WORLD_HEIGHT
         );
-        hs = new HiloServidor();
-        hs.start();
+        hc = new HiloCliente();
+        hc.start();
+
         resize(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
     }
 
     @Override
     public void render(float delta) {
-        if (!Global.empieza) {
+
+        if(!Global.empieza){
             Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
             hud.dibujarMensajeCentral(batch, "ESPERANDO RIVAL...", Color.WHITE);
-        } else {
+        }
+        else {
             if (debeVolverAlMenu) {
                 game.setScreen(new PantallaMenu((juego.Principal) game));
                 dispose();
@@ -197,7 +198,7 @@ public class PantallaPartida implements Screen {
             Gdx.gl.glClearColor(0, 0.1f, 0, 1);
             Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
 
-            // ✅ REFACTORIZADO: Si la pantalla final está activa, mostrarla
+
             if (pantallaFinal.isActiva()) {
                 pantallaFinal.render(batch, shapeRenderer);
                 return;
@@ -246,23 +247,25 @@ public class PantallaPartida implements Screen {
         }
     }
 
+
+
     public void update(float delta) {
         animacion.update(delta);
         partida.update(delta);
-
+        if (partida.esTurnoJugador()) {
+            // AQUÍ: Enviar al servidor la carta jugada
+            // hc.enviarMensaje("CARTA_JUGADA:" + numeroCarta + ":" + palo);
+        }
         manoManager.setEsMiTurno(partida.esTurnoJugador());
 
-        // ✅ REFACTORIZADO: Actualizar botón de truco y pantalla final
         if (!pantallaFinal.isActiva() && !partida.partidaTerminada()) {
             botonTruco.update(delta);
             botonTruco.detectarClick();
         }
 
-        // ✅ REFACTORIZADO: Actualizar pantalla final si está activa
         if (pantallaFinal.isActiva()) {
             boolean solicitudVolver = pantallaFinal.update(delta);
             if (solicitudVolver) {
-                // ✅ FIX: Solo setear el flag, no cambiar de pantalla aquí
                 debeVolverAlMenu = true;
             }
             return;
@@ -270,7 +273,7 @@ public class PantallaPartida implements Screen {
 
         // Verificar si la partida terminó
         if (partida.partidaTerminada() && !pantallaFinal.isActiva()) {
-            // ✅ REFACTORIZADO: Activar la pantalla final
+
             pantallaFinal.activar(
                     partida.getGanador(),
                     jugadores.get(0),
@@ -284,7 +287,6 @@ public class PantallaPartida implements Screen {
             return;
         }
 
-        // Si la partida está lista para nueva ronda
         if (partida.rondaTerminada()) {
             inicioRonda = true;
             partida.nuevaRonda();
@@ -308,10 +310,7 @@ public class PantallaPartida implements Screen {
         }
     }
 
-    /**
-     * ✅ DEPRECADO: Ya no se usa, se maneja con el flag debeVolverAlMenu
-     * Mantenido por si se necesita llamar desde otro lugar
-     */
+
     private void volverAlMenu() {
         debeVolverAlMenu = true;
     }

@@ -3,10 +3,12 @@ package juego.pantallas;
 import juego.elementos.*;
 import juego.personajes.Jugador;
 import juego.personajes.RivalBot;
+import juego.utilidades.Aleatorio;
+import juego.utilidades.Global;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Random;
+
 
 public class Partida {
 
@@ -15,8 +17,6 @@ public class Partida {
 
     public enum TipoJugador { JUGADOR_1, JUGADOR_2 }
 
-    private enum EstadoTurno { ESPERANDO_JUGADOR_1, ESPERANDO_JUGADOR_2, FINALIZANDO_MANO, PARTIDA_TERMINADA }
-    private EstadoTurno estadoActual;
 
     private final int PUNTOS_PARA_GANAR = 15;
     private Jugador ganador = null;
@@ -34,11 +34,9 @@ public class Partida {
     private float delayFinalizacion = 0;
     private boolean esperandoFinalizacion = false;
 
-    private int manoActual = 0;
     private final int MAX_MANOS = 3;
 
-    private TipoJugador jugadorMano;  // Quién empieza la ronda
-    private Random random = new Random();
+    private TipoJugador jugadorMano;
 
     private boolean trucoUsado = false;
     private int manoTrucoUsada = -1;
@@ -53,7 +51,7 @@ public class Partida {
     }
 
     public void inicializar(ZonaJuego zonaJug1, ZonaJuego zonaJug2, RivalBot bot,
-                            Jugador jug1, Jugador jug2, int manoActual) {
+                            Jugador jug1, Jugador jug2) {
         this.zonaJugador1 = zonaJug1;
         this.zonaJugador2 = zonaJug2;
         this.rivalBot = bot;
@@ -61,18 +59,17 @@ public class Partida {
         this.jugador2 = jug2;
 
         // Determinar quién empieza de forma aleatoria
-        this.jugadorMano = random.nextBoolean() ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+        this.jugadorMano = Aleatorio.r.nextBoolean() ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
 
-        this.estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                ? EstadoTurno.ESPERANDO_JUGADOR_1
-                : EstadoTurno.ESPERANDO_JUGADOR_2;
+        Global.estadoTurno = (jugadorMano == TipoJugador.JUGADOR_1)
+                ? Global.EstadoTurno.ESPERANDO_JUGADOR_1
+                : Global.EstadoTurno.ESPERANDO_JUGADOR_2;
 
         System.out.println("INICIO DE PARTIDA - Empieza: " +
                 (jugadorMano == TipoJugador.JUGADOR_1 ? jug1.getNombre() : jug2.getNombre()));
 
         this.cartasJugador1Antes = 0;
         this.cartasJugador2Antes = 0;
-        this.manoActual = manoActual;
 
         this.trucoUsado = false;
         this.manoTrucoUsada = -1;
@@ -103,7 +100,7 @@ public class Partida {
         if (esperandoFinalizacion) {
             delayFinalizacion += delta;
             if (delayFinalizacion >= 1.5f) {
-                estadoActual = EstadoTurno.FINALIZANDO_MANO;
+                Global.estadoTurno = Global.EstadoTurno.FINALIZANDO_MANO;
                 esperandoFinalizacion = false;
                 delayFinalizacion = 0;
             } else {
@@ -111,7 +108,7 @@ public class Partida {
             }
         }
 
-        switch (estadoActual) {
+        switch (Global.estadoTurno) {
             case ESPERANDO_JUGADOR_1:
                 int cartasJug1Actual = zonaJugador1.getCantidadCartas();
 
@@ -120,24 +117,24 @@ public class Partida {
                     cartasJugador1Antes = cartasJug1Actual;
 
                     if (cartasJugador1Antes == cartasJugador2Antes) {
-                        manoActual++;
-                        System.out.println("=== Completada mano " + manoActual + " de " + MAX_MANOS + " ===");
+                        Global.manoActual++;
+                        System.out.println("=== Completada mano " + Global.manoActual + " de " + MAX_MANOS + " ===");
 
-                        if (manoActual >= MAX_MANOS) {
+                        if (Global.manoActual >= MAX_MANOS) {
                             esperandoFinalizacion = true;
                             delayFinalizacion = 0;
                         } else {
                             // Siguiente mano - quien es "mano" sigue empezando
-                            estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                                    ? EstadoTurno.ESPERANDO_JUGADOR_1
-                                    : EstadoTurno.ESPERANDO_JUGADOR_2;
+                            Global.estadoTurno = (jugadorMano == TipoJugador.JUGADOR_1)
+                                    ? Global.EstadoTurno.ESPERANDO_JUGADOR_1
+                                    : Global.EstadoTurno.ESPERANDO_JUGADOR_2;
 
-                            if (estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2 && rivalBot != null) {
+                            if (Global.estadoTurno == Global.EstadoTurno.ESPERANDO_JUGADOR_2 && rivalBot != null) {
                                 rivalBot.activarTurno();
                             }
                         }
                     } else {
-                        estadoActual = EstadoTurno.ESPERANDO_JUGADOR_2;
+                        Global.estadoTurno = Global.EstadoTurno.ESPERANDO_JUGADOR_2;
                         if (rivalBot != null) {
                             rivalBot.activarTurno();
                         }
@@ -162,24 +159,24 @@ public class Partida {
                         cartasJugador2Antes = cartasJug2Actual;
 
                         if (cartasJugador1Antes == cartasJugador2Antes) {
-                            manoActual++;
-                            System.out.println("=== Completada mano " + manoActual + " de " + MAX_MANOS + " ===");
+                            Global.manoActual++;
+                            System.out.println("=== Completada mano " + Global.manoActual + " de " + MAX_MANOS + " ===");
 
-                            if (manoActual >= MAX_MANOS) {
+                            if (Global.manoActual >= MAX_MANOS) {
                                 esperandoFinalizacion = true;
                                 delayFinalizacion = 0;
                             } else {
                                 // Siguiente mano - quien es "mano" sigue empezando
-                                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                                        ? EstadoTurno.ESPERANDO_JUGADOR_1
-                                        : EstadoTurno.ESPERANDO_JUGADOR_2;
+                                Global.estadoTurno = (jugadorMano == TipoJugador.JUGADOR_1)
+                                        ? Global.EstadoTurno.ESPERANDO_JUGADOR_1
+                                        : Global.EstadoTurno.ESPERANDO_JUGADOR_2;
 
-                                if (estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2 && rivalBot != null) {
+                                if (Global.estadoTurno == Global.EstadoTurno.ESPERANDO_JUGADOR_2 && rivalBot != null) {
                                     rivalBot.activarTurno();
                                 }
                             }
                         } else {
-                            estadoActual = EstadoTurno.ESPERANDO_JUGADOR_1;
+                            Global.estadoTurno = Global.EstadoTurno.ESPERANDO_JUGADOR_1;
                         }
                     }
                 }
@@ -212,7 +209,6 @@ public class Partida {
             System.out.println("  - " + c.getNombre() + " (Jerarquía: " + c.getJerarquia() + ")");
         }
 
-        // Evaluar cada mano
         for (int i = 0; i < Math.min(cartasJug1.size(), cartasJug2.size()); i++) {
             Carta cartaJug1 = cartasJug1.get(i);
             Carta cartaJug2 = cartasJug2.get(i);
@@ -225,35 +221,33 @@ public class Partida {
 
             // Jerarquía menor = carta más fuerte
             if (cartaJug1.getJerarquia() < cartaJug2.getJerarquia()) {
-                jugador1.sumarPuntos(puntosEnJuego);
-                System.out.println("Mano " + (i+1) + ": GANÓ " + jugador1.getNombre() +
+                Global.puntosJ1 += puntosEnJuego;
+                System.out.println("Mano " + (i + 1) + ": GANÓ " + jugador1.getNombre() +
                         " (+" + puntosEnJuego + " puntos)");
             } else if (cartaJug1.getJerarquia() > cartaJug2.getJerarquia()) {
-                jugador2.sumarPuntos(puntosEnJuego);
-                System.out.println("Mano " + (i+1) + ": GANÓ " + jugador2.getNombre() +
+                Global.puntosJ2 += puntosEnJuego;
+                System.out.println("Mano " + (i + 1) + ": GANÓ " + jugador2.getNombre() +
                         " (+" + puntosEnJuego + " puntos)");
             } else {
-                System.out.println("Mano " + (i+1) + ": EMPATE (parda)");
+                System.out.println("Mano " + (i + 1) + ": EMPATE (parda)");
             }
         }
 
         System.out.println("\nResultado: " + jugador1.getNombre() + " " +
-                jugador1.getPuntos() + " - " +
-                jugador2.getPuntos() + " " + jugador2.getNombre());
+                Global.puntosJ1 + " - " +
+                Global.puntosJ2 + " " + jugador2.getNombre());
 
-        if (jugador1.getPuntos() >= PUNTOS_PARA_GANAR) {
+        if (Global.puntosJ1 >= PUNTOS_PARA_GANAR) {
             ganador = jugador1;
-            estadoActual = EstadoTurno.PARTIDA_TERMINADA;
-            System.out.println("\n🏆 ¡GANADOR: " + jugador1.getNombre() + "!");
-        } else if (jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
+            Global.estadoTurno = Global.EstadoTurno.PARTIDA_TERMINADA;
+        } else if (Global.puntosJ2 >= PUNTOS_PARA_GANAR) {
             ganador = jugador2;
-            estadoActual = EstadoTurno.PARTIDA_TERMINADA;
-            System.out.println("\n🏆 ¡GANADOR: " + jugador2.getNombre() + "!");
+            Global.estadoTurno = Global.EstadoTurno.PARTIDA_TERMINADA;
         }
     }
 
     public boolean esTurnoJugador1() {
-        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_1;
+        return Global.estadoTurno == Global.EstadoTurno.ESPERANDO_JUGADOR_1;
     }
 
     public boolean esTurnoJugador() {
@@ -261,15 +255,15 @@ public class Partida {
     }
 
     public boolean esTurnoJugador2() {
-        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2;
+        return Global.estadoTurno == Global.EstadoTurno.ESPERANDO_JUGADOR_2;
     }
 
     public boolean rondaTerminada() {
-        return estadoActual == EstadoTurno.FINALIZANDO_MANO && ganador == null;
+        return Global.estadoTurno == Global.EstadoTurno.FINALIZANDO_MANO && ganador == null;
     }
 
     public boolean partidaTerminada() {
-        return estadoActual == EstadoTurno.PARTIDA_TERMINADA;
+        return Global.estadoTurno == Global.EstadoTurno.PARTIDA_TERMINADA;
     }
 
     public Jugador getGanador() {
@@ -282,16 +276,16 @@ public class Partida {
                 ? TipoJugador.JUGADOR_2
                 : TipoJugador.JUGADOR_1;
 
-        estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                ? EstadoTurno.ESPERANDO_JUGADOR_1
-                : EstadoTurno.ESPERANDO_JUGADOR_2;
+        Global.estadoTurno = (jugadorMano == TipoJugador.JUGADOR_1)
+                ? Global.EstadoTurno.ESPERANDO_JUGADOR_1
+                : Global.EstadoTurno.ESPERANDO_JUGADOR_2;
 
         System.out.println("NUEVA RONDA - Empieza: " +
                 (jugadorMano == TipoJugador.JUGADOR_1 ? jugador1.getNombre() : jugador2.getNombre()));
 
         cartasJugador1Antes = 0;
         cartasJugador2Antes = 0;
-        manoActual = 0;
+        Global.manoActual = 0;
 
         if (zonaJugador1 != null) zonaJugador1.limpiar();
         if (zonaJugador2 != null) zonaJugador2.limpiar();
@@ -307,7 +301,7 @@ public class Partida {
     }
 
     public int getManoActual() {
-        return manoActual;
+        return Global.manoActual;
     }
 
     // ✅ NUEVO: Verificar si es el turno del primero que tira en esta mano
@@ -340,7 +334,7 @@ public class Partida {
         }
 
         trucoUsado = true;
-        manoTrucoUsada = manoActual;
+        manoTrucoUsada = Global.manoActual;
         jugadorQueCanto = jugador;
 
         String nombreJugador = (jugador == TipoJugador.JUGADOR_1)
@@ -348,7 +342,7 @@ public class Partida {
                 : jugador2.getNombre();
 
         System.out.println("¡" + nombreJugador + " CANTÓ TRUCO! La mano " +
-                (manoActual + 1) + " vale 2 puntos");
+                (Global.manoActual + 1) + " vale 2 puntos");
 
         return true;
     }
@@ -358,7 +352,7 @@ public class Partida {
     }
 
     public boolean isTrucoActivoEnManoActual() {
-        return trucoUsado && manoTrucoUsada == manoActual;
+        return trucoUsado && manoTrucoUsada == Global.manoActual;
     }
 
     public int getManoTrucoUsada() {

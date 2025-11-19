@@ -4,7 +4,6 @@ import juego.elementos.Carta;
 
 public class Jugador {
     private String nombre;
-    private int puntos;
     private Carta mano[] = new Carta[3];
     private int cantCartas = 0;
 
@@ -12,13 +11,11 @@ public class Jugador {
 
 
     public Jugador() {
-        this.puntos = 0;
         this.nombre = "Jugador";
     }
 
     public Jugador(String nombre) {
         this.nombre = nombre;
-        this.puntos = 0;
     }
 
     public String getNombre() {
@@ -31,15 +28,6 @@ public class Jugador {
 
     public Carta[] getMano() {
         return mano;
-    }
-
-    public int getPuntos() {
-        return puntos;
-    }
-
-    // ✅ NUEVO: Sumar puntos
-    public void sumarPuntos(int cantidad) {
-        this.puntos += cantidad;
     }
 
 
@@ -57,8 +45,5 @@ public class Jugador {
         }
         cantCartas = 0;
     }
-
-
-    // ✅ NUEVO: Verificar si tiene una carta específica
 
 }
