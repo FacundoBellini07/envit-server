@@ -304,4 +304,7 @@ public class Partida {
         return ganador;
     }
 
+    public int getManoTrucoUsada() {
+        return manoTrucoUsada;
+    }
 }
