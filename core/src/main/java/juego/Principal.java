@@ -22,7 +22,9 @@ public class Principal extends Game {
 	@Override
 	public void dispose() {
 		batch.dispose();
-		super.dispose(); // Por si la pantalla también tiene cosas que liberar
+		super.dispose();
+        System.out.println("Cerrando juego completamente...");
+        System.exit(0);
 	}
 }
 

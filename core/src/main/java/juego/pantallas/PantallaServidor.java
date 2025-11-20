@@ -64,6 +64,9 @@ public class PantallaServidor implements Screen {
     public void dispose() {
         batch.dispose();
         font.dispose();
+        if(hiloServidor != null) {
+            hiloServidor.detener();
+        }
     }
 
     // Métodos vacíos requeridos por Screen

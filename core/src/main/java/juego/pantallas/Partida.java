@@ -95,29 +95,17 @@ public class Partida {
         System.out.println("[SERVIDOR] Cartas repartidas a ambos jugadores");
     }
 
-    // ✅ NUEVO: Obtener cartas del jugador 1
     public Carta[] getCartasJugador1() {
         return jugador1 != null ? jugador1.getMano() : null;
     }
 
-    // ✅ NUEVO: Obtener cartas del jugador 2
     public Carta[] getCartasJugador2() {
         return jugador2 != null ? jugador2.getMano() : null;
     }
 
-    // ✅ NUEVO: Verificar si la ronda está completa (3 cartas jugadas)
     public boolean rondaCompletada() {
         return manoActual >= MAX_MANOS;
     }
-
-    // ✅ NUEVO: Limpiar las manos de los jugadores
-    public void limpiarManosJugadores() {
-        if (jugador1 != null) jugador1.limpiarMazo();
-        if (jugador2 != null) jugador2.limpiarMazo();
-        System.out.println("[SERVIDOR] Manos de jugadores limpiadas");
-    }
-
-    // ✅ NUEVO: Repartir nuevas cartas para la siguiente ronda
     public void repartirNuevasCartas() {
         repartirCartas(jugador1, jugador2);
 
@@ -195,35 +183,42 @@ public class Partida {
     }
 
     private void evaluarRonda() {
-        System.out.println("\n[SERVIDOR] === EVALUANDO RONDA ===");
+        System.out.println("\n[SERVIDOR] === EVALUANDO MANO " + (manoActual + 1) + " ===");
 
         ArrayList<Carta> cartasJug1 = zonaJugador1.getCartasJugadas();
         ArrayList<Carta> cartasJug2 = zonaJugador2.getCartasJugadas();
 
-        for (int i = 0; i < Math.min(cartasJug1.size(), cartasJug2.size()); i++) {
-            Carta cartaJug1 = cartasJug1.get(i);
-            Carta cartaJug2 = cartasJug2.get(i);
+        int i = manoActual;
 
-            int puntosEnJuego = 1;
-            if (trucoUsado && manoTrucoUsada == i) {
-                puntosEnJuego = 2;
-                System.out.println("[SERVIDOR] ¡TRUCO! Esta mano vale " + puntosEnJuego + " puntos");
-            }
-
-            if (cartaJug1.getJerarquia() < cartaJug2.getJerarquia()) {
-                jugador1.sumarPuntos(puntosEnJuego);
-                System.out.println("[SERVIDOR] Mano " + (i+1) + ": GANÓ " +
-                        jugador1.getNombre() + " (+" + puntosEnJuego + " puntos)");
-            } else if (cartaJug1.getJerarquia() > cartaJug2.getJerarquia()) {
-                jugador2.sumarPuntos(puntosEnJuego);
-                System.out.println("[SERVIDOR] Mano " + (i+1) + ": GANÓ " +
-                        jugador2.getNombre() + " (+" + puntosEnJuego + " puntos)");
-            } else {
-                System.out.println("[SERVIDOR] Mano " + (i+1) + ": EMPATE (parda)");
-            }
+        if (i >= cartasJug1.size() || i >= cartasJug2.size()) {
+            System.out.println("[SERVIDOR] Error: No hay cartas suficientes para evaluar mano " + i);
+            return;
         }
 
-        System.out.println("[SERVIDOR] Resultado: " + jugador1.getNombre() + " " +
+        Carta cartaJug1 = cartasJug1.get(i);
+        Carta cartaJug2 = cartasJug2.get(i);
+
+        int puntosEnJuego = 1;
+
+        if (trucoUsado && manoTrucoUsada == i) {
+            puntosEnJuego = 2;
+            System.out.println("[SERVIDOR] ¡TRUCO! Esta mano vale " + puntosEnJuego + " puntos");
+        }
+
+        if (cartaJug1.getJerarquia() < cartaJug2.getJerarquia()) {
+            jugador1.sumarPuntos(puntosEnJuego);
+            System.out.println("[SERVIDOR] Mano " + (i+1) + ": GANÓ " +
+                    jugador1.getNombre() + " (+" + puntosEnJuego + " puntos)");
+        } else if (cartaJug1.getJerarquia() > cartaJug2.getJerarquia()) {
+            jugador2.sumarPuntos(puntosEnJuego);
+            System.out.println("[SERVIDOR] Mano " + (i+1) + ": GANÓ " +
+                    jugador2.getNombre() + " (+" + puntosEnJuego + " puntos)");
+        } else {
+            System.out.println("[SERVIDOR] Mano " + (i+1) + ": EMPATE (parda)");
+            // Aquí podrías implementar la lógica de quién gana en parda si lo necesitas
+        }
+
+        System.out.println("[SERVIDOR] Resultado Parcial: " + jugador1.getNombre() + " " +
                 jugador1.getPuntos() + " - " +
                 jugador2.getPuntos() + " " + jugador2.getNombre());
     }
@@ -257,15 +252,49 @@ public class Partida {
 
         return true;
     }
+    public void resetearTotal() {
+        System.out.println("[SERVIDOR] Realizando reseteo total de la partida...");
+
+        // 1. Reiniciar variables de flujo
+        this.manoActual = 0;
+        this.ganador = null;
+        this.cartasJugador1Antes = 0;
+        this.cartasJugador2Antes = 0;
+
+        // 2. Reiniciar el mazo (Barajar de nuevo)
+        this.indiceMazo = 0;
+        Collections.shuffle(mazoRevuelto);
+
+        // 3. Resetear Truco
+        resetearTruco();
+
+        // 4. Limpiar Jugadores (Puntos y Manos)
+        if (jugador1 != null) {
+            jugador1.setPuntos(0); // Asegúrate de tener este setter en Jugador
+            jugador1.limpiarMazo();
+        }
+        if (jugador2 != null) {
+            jugador2.setPuntos(0);
+            jugador2.limpiarMazo();
+        }
+
+        // 5. Limpiar Mesa (Zonas de juego)
+        if (zonaJugador1 != null) zonaJugador1.limpiar();
+        if (zonaJugador2 != null) zonaJugador2.limpiar();
+
+        // 6. Reiniciar quién es mano aleatoriamente para la nueva partida
+        this.jugadorMano = random.nextBoolean() ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+
+        // 7. Establecer estado inicial
+        this.estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
+                ? EstadoTurno.ESPERANDO_JUGADOR_1
+                : EstadoTurno.ESPERANDO_JUGADOR_2;
+
+        System.out.println("[SERVIDOR] Partida reiniciada completamente. Puntos a 0. Esperando jugadores.");
+    }
 
     public boolean esPrimerTurnoEnMano() {
         return cartasJugador1Antes == cartasJugador2Antes;
-    }
-
-
-    // Getters
-    public boolean esTurnoJugador1() {
-        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_1;
     }
 
     public boolean esTurnoJugador2() {
@@ -306,5 +335,9 @@ public class Partida {
 
     public int getManoTrucoUsada() {
         return manoTrucoUsada;
+    }
+
+    public Jugador getJugador1() {
+        return jugador1;
     }
 }
