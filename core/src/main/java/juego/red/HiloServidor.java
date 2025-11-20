@@ -119,13 +119,6 @@ public class HiloServidor extends Thread {
             procesarConexion(dp);
         }
 
-        else if (mensaje.equals("SALIR")) {
-            System.out.println("[SERVIDOR] Un jugador se desconectó. Reiniciando servidor...");
-            enviarAmbos("RIVAL_SE_FUE");
-            cantClientes = 0;
-            clientes = new Cliente[2];
-            partidaLogica = new Partida();
-        }
         else if (mensaje.startsWith("CARTA_JUGADA:")) {
             procesarCartaJugada(dp, mensaje);
         } else if (mensaje.equals("TRUCO")) {
