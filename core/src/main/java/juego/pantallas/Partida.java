@@ -262,10 +262,6 @@ public class Partida {
         return cartasJugador1Antes == cartasJugador2Antes;
     }
 
-    public void procesarJugadaServidor(TipoJugador jugadorQueJugo, int valor, Palo palo) {
-        Carta carta = new Carta(valor, palo);
-        jugarCarta(jugadorQueJugo, carta);
-    }
 
     // Getters
     public boolean esTurnoJugador1() {

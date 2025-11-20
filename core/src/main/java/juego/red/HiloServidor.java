@@ -94,31 +94,21 @@ public class HiloServidor extends Thread {
     private void iniciarPartida() {
         System.out.println("[SERVIDOR] Iniciando partida con 2 jugadores");
 
-        // Determinar quién empieza
         TipoJugador quienEmpieza = partidaLogica.getJugadorMano();
         int idEmpieza = (quienEmpieza == TipoJugador.JUGADOR_1) ? 0 : 1;
 
-        // Enviar quien empieza
         enviarAmbos("EMPIEZA:" + idEmpieza);
-
-        // Repartir cartas
         repartirCartasAJugadores();
-
-        // Enviar estado inicial
         enviarEstadoActual();
     }
 
     private void repartirCartasAJugadores() {
         System.out.println("[SERVIDOR] Repartiendo cartas a los jugadores");
 
-        // Obtener las cartas de cada jugador desde la partida del servidor
         Carta[] cartasJ1 = partidaLogica.getCartasJugador1();
         Carta[] cartasJ2 = partidaLogica.getCartasJugador2();
 
-        // Enviar las 3 cartas al jugador 1
         enviarCartasAJugador(0, cartasJ1);
-
-        // Enviar las 3 cartas al jugador 2
         enviarCartasAJugador(1, cartasJ2);
     }
 
@@ -171,21 +161,36 @@ public class HiloServidor extends Thread {
 
             enviarEstadoActual();
 
+            // ✅ NUEVO: Verificar si la ronda completó (3 manos jugadas)
+            if (partidaLogica.rondaCompletada()) {
+                System.out.println("[SERVIDOR] ¡Ronda completada! Iniciando nueva ronda...");
+
+                // Pequeño delay para que los clientes vean el resultado
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                iniciarNuevaRonda();
+            }
         }
     }
 
     private void iniciarNuevaRonda() {
-        // Limpiar las manos de los jugadores
-        partidaLogica.limpiarManosJugadores();
+        System.out.println("[SERVIDOR] Iniciando nueva ronda");
 
-        // Repartir nuevas cartas
+        // Repartir nuevas cartas (esto resetea manoActual a 0 en la partida)
         partidaLogica.repartirNuevasCartas();
 
         // Enviar las nuevas cartas a ambos jugadores
-        repartirCartasAJugadores();
 
         // Notificar a los clientes que deben limpiar sus zonas
         enviarAmbos("NUEVA_RONDA");
+
+        repartirCartasAJugadores();
+        // Enviar el nuevo estado
+        enviarEstadoActual();
 
         System.out.println("[SERVIDOR] Nueva ronda iniciada");
     }
@@ -201,11 +206,9 @@ public class HiloServidor extends Thread {
 
         TipoJugador jugadorQueCanto = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
 
-        // Validar en el servidor
         boolean trucoValido = partidaLogica.cantarTruco(jugadorQueCanto);
 
         if (trucoValido) {
-            // Notificar al rival
             int rival = (idx == 0) ? 1 : 0;
             enviarMensaje(
                     "TRUCO_RIVAL",

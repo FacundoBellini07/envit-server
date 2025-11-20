@@ -3,21 +3,15 @@ package juego.elementos;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import juego.personajes.Jugador;
+import juego.personajes.TipoJugador;
 
-/**
- * HUD (Heads-Up Display) que muestra información de la partida:
- * - Puntos del jugador
- * - Puntos del rival
- * - Mano actual (1/3, 2/3, 3/3)
- * - Estado del truco
- */
 public class Hud {
 
+    private TipoJugador miRol;
     private BitmapFont font;
-    private Jugador jugador;
-    private Jugador rival;
+    private Jugador jugador1;
+    private Jugador jugador2;
 
     private float worldWidth;
     private float worldHeight;
@@ -31,55 +25,33 @@ public class Hud {
     // Posiciones
     private float margen = 20f;
 
-    public Hud(BitmapFont font, Jugador jugador, Jugador rival, float worldWidth, float worldHeight) {
+    public Hud(BitmapFont font, Jugador jugador1, Jugador jugador2, float worldWidth, float worldHeight, TipoJugador miRol) {
         this.font = font;
-        this.jugador = jugador;
-        this.rival = rival;
+        this.jugador1 = jugador1;
+        this.jugador2 = jugador2;
         this.worldWidth = worldWidth;
         this.worldHeight = worldHeight;
+        this.miRol = miRol;
     }
 
-    /**
-     * Dibuja el HUD completo
-     */
-    public void render(SpriteBatch batch, int manoActual, boolean esTurnoJugador) {
-        batch.begin();
-
-        // Panel de puntos del jugador (abajo izquierda)
-        dibujarPuntosJugador(batch);
-
-        // Panel de puntos del rival (arriba izquierda)
-        dibujarPuntosRival(batch);
-
-        // Información de mano actual (arriba centro)
-        dibujarInfoMano(batch, manoActual);
-
-        // Indicador de turno (centro derecha)
-        dibujarIndicadorTurno(batch, esTurnoJugador);
-
-        batch.end();
-    }
-
-    /**
-     * ✅ NUEVO: Render con información de truco
-     */
     public void render(SpriteBatch batch, int manoActual, boolean esTurnoJugador,
                        boolean trucoActivo, int manoTruco) {
         batch.begin();
 
-        // Panel de puntos del jugador (abajo izquierda)
-        dibujarPuntosJugador(batch);
+        // ✅ CORREGIDO: Mostrar puntos según el rol del jugador
+        if(miRol == TipoJugador.JUGADOR_1){
+            // Soy jugador 1, mis puntos abajo, rival (j2) arriba
+            dibujarPuntosJugador(batch, jugador1.getPuntos());
+            dibujarPuntosRival(batch, jugador2.getPuntos());
+        } else {
+            // Soy jugador 2, mis puntos abajo, rival (j1) arriba
+            dibujarPuntosJugador(batch, jugador2.getPuntos());
+            dibujarPuntosRival(batch, jugador1.getPuntos());
+        }
 
-        // Panel de puntos del rival (arriba izquierda)
-        dibujarPuntosRival(batch);
-
-        // Información de mano actual (arriba centro)
         dibujarInfoMano(batch, manoActual);
-
-        // Indicador de turno (centro derecha)
         dibujarIndicadorTurno(batch, esTurnoJugador);
 
-        // ✅ NUEVO: Mostrar si el truco está activo
         if (trucoActivo && manoActual == manoTruco) {
             dibujarIndicadorTruco(batch, manoActual);
         }
@@ -87,11 +59,11 @@ public class Hud {
         batch.end();
     }
 
-    private void dibujarPuntosJugador(SpriteBatch batch) {
+    private void dibujarPuntosJugador(SpriteBatch batch, int puntos) {
         font.setColor(colorJugador);
         font.getData().setScale(1.5f);
 
-        String textoJugador = "TU: " + jugador.getPuntos() + " pts";
+        String textoJugador = "TU: " + puntos + " pts";
 
         float x = margen;
         float y = margen + 30;
@@ -99,11 +71,11 @@ public class Hud {
         font.draw(batch, textoJugador, x, y);
     }
 
-    private void dibujarPuntosRival(SpriteBatch batch) {
+    private void dibujarPuntosRival(SpriteBatch batch, int puntos) {
         font.setColor(colorRival);
         font.getData().setScale(1.5f);
 
-        String textoRival = "RIVAL: " + rival.getPuntos() + " pts";
+        String textoRival = "RIVAL: " + puntos + " pts";
 
         float x = margen;
         float y = worldHeight - margen;
@@ -113,7 +85,7 @@ public class Hud {
 
     private void dibujarInfoMano(SpriteBatch batch, int manoActual) {
         if (manoActual < 0 || manoActual > 2) {
-            return; // No mostrar si no hay mano en curso
+            return;
         }
 
         font.setColor(colorNeutral);
@@ -121,7 +93,6 @@ public class Hud {
 
         String textoMano = "MANO " + (manoActual + 1) + "/3";
 
-        // Arriba centro
         com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, textoMano);
 
@@ -131,9 +102,6 @@ public class Hud {
         font.draw(batch, textoMano, x, y);
     }
 
-    /**
-     * Dibuja un indicador visual de quién tiene el turno
-     */
     private void dibujarIndicadorTurno(SpriteBatch batch, boolean esTurnoJugador) {
         font.getData().setScale(1.0f);
 
@@ -150,7 +118,6 @@ public class Hud {
 
         font.setColor(color);
 
-        // Derecha centro
         com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, texto);
 
@@ -160,16 +127,12 @@ public class Hud {
         font.draw(batch, texto, x, y);
     }
 
-    /**
-     * ✅ NUEVO: Dibuja el indicador de que el truco está activo
-     */
     private void dibujarIndicadorTruco(SpriteBatch batch, int manoActual) {
         font.setColor(colorTruco);
         font.getData().setScale(1.8f);
 
         String textoTruco = "¡TRUCO! x2";
 
-        // Centro superior
         com.badlogic.gdx.graphics.g2d.GlyphLayout layout =
                 new com.badlogic.gdx.graphics.g2d.GlyphLayout(font, textoTruco);
 
@@ -179,9 +142,6 @@ public class Hud {
         font.draw(batch, textoTruco, x, y);
     }
 
-    /**
-     * Dibuja un mensaje temporal grande en el centro (para anuncios)
-     */
     public void dibujarMensajeCentral(SpriteBatch batch, String mensaje, Color color) {
         batch.begin();
 
