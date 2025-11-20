@@ -6,13 +6,6 @@ import juego.pantallas.Partida;
 
 import java.util.Random;
 
-/**
- * Bot provisorio para simular un rival.
- * Tira cartas de forma automática con un delay.
- * ✅ ACTUALIZADO: Solo puede cantar truco si es el primer turno de la mano
- *
- * TODO: Reemplazar con sistema online en la versión final.
- */
 public class RivalBot {
 
     private Jugador jugador;
