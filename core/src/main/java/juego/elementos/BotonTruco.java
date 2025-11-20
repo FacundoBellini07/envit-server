@@ -13,10 +13,6 @@ import com.badlogic.gdx.utils.viewport.Viewport;
 import juego.pantallas.Partida;
 import juego.personajes.TipoJugador;
 
-/**
- * Botón visual para cantar Truco en el juego
- * ✅ ACTUALIZADO: Solo disponible para quien tira primero en cada mano
- */
 public class BotonTruco {
 
     private Rectangle btnRect;
@@ -152,7 +148,6 @@ public class BotonTruco {
     }
 
     private void actualizarHover() {
-        // ✅ ACTUALIZADO: Solo hacer hover si el botón está disponible
         boolean trucoDisponible = !partida.isTrucoUsado()
                 && partida.esPrimerTurnoEnMano()
                 && partida.esTurnoJugador()

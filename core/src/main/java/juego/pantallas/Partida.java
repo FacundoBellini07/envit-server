@@ -14,8 +14,6 @@ public class Partida {
     private ArrayList<Carta> mazoRevuelto = new ArrayList<>();
     private int indiceMazo = 0;
 
-
-
     private EstadoTurno estadoActual;
 
     private final int PUNTOS_PARA_GANAR = 15;
@@ -31,13 +29,10 @@ public class Partida {
     private int cartasJugador1Antes = 0;
     private int cartasJugador2Antes = 0;
 
-    private float delayFinalizacion = 0;
-    private boolean esperandoFinalizacion = false;
-
     private int manoActual = 0;
     private final int MAX_MANOS = 3;
 
-    private TipoJugador jugadorMano;  // Quién empieza la ronda
+    private TipoJugador jugadorMano;
     private Random random = new Random();
 
     private boolean trucoUsado = false;
@@ -61,20 +56,23 @@ public class Partida {
         this.jugador1 = jug1;
         this.jugador2 = jug2;
 
-        // Determinar quién empieza de forma aleatoria
         this.jugadorMano = random.nextBoolean() ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
 
         this.estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
                 ? EstadoTurno.ESPERANDO_JUGADOR_1
                 : EstadoTurno.ESPERANDO_JUGADOR_2;
 
-        System.out.println("INICIO DE PARTIDA - Empieza: " +
+        System.out.println("[SERVIDOR] INICIO DE PARTIDA - Empieza: " +
                 (jugadorMano == TipoJugador.JUGADOR_1 ? jug1.getNombre() : jug2.getNombre()));
 
         this.cartasJugador1Antes = 0;
         this.cartasJugador2Antes = 0;
         this.manoActual = manoActual;
 
+        resetearTruco();
+    }
+
+    private void resetearTruco() {
         this.trucoUsado = false;
         this.manoTrucoUsada = -1;
         this.jugadorQueCanto = null;
@@ -86,134 +84,122 @@ public class Partida {
             Collections.shuffle(mazoRevuelto);
         }
 
+        jugador1.limpiarMazo();
+        jugador2.limpiarMazo();
+
         for (int i = 0; i < 3; i++) {
             jugador1.agregarCarta(mazoRevuelto.get(indiceMazo++));
             jugador2.agregarCarta(mazoRevuelto.get(indiceMazo++));
         }
+
+        System.out.println("[SERVIDOR] Cartas repartidas a ambos jugadores");
     }
 
-    public void update(float delta) {
-        if (zonaJugador1 == null || zonaJugador2 == null) {
-            return;
+    // ✅ NUEVO: Obtener cartas del jugador 1
+    public Carta[] getCartasJugador1() {
+        return jugador1 != null ? jugador1.getMano() : null;
+    }
+
+    // ✅ NUEVO: Obtener cartas del jugador 2
+    public Carta[] getCartasJugador2() {
+        return jugador2 != null ? jugador2.getMano() : null;
+    }
+
+    // ✅ NUEVO: Verificar si la ronda está completa (3 cartas jugadas)
+    public boolean rondaCompletada() {
+        return manoActual >= MAX_MANOS;
+    }
+
+    // ✅ NUEVO: Limpiar las manos de los jugadores
+    public void limpiarManosJugadores() {
+        if (jugador1 != null) jugador1.limpiarMazo();
+        if (jugador2 != null) jugador2.limpiarMazo();
+        System.out.println("[SERVIDOR] Manos de jugadores limpiadas");
+    }
+
+    // ✅ NUEVO: Repartir nuevas cartas para la siguiente ronda
+    public void repartirNuevasCartas() {
+        repartirCartas(jugador1, jugador2);
+
+        // Resetear contadores de mano
+        manoActual = 0;
+        cartasJugador1Antes = 0;
+        cartasJugador2Antes = 0;
+
+        // Limpiar zonas de juego
+        if (zonaJugador1 != null) zonaJugador1.limpiar();
+        if (zonaJugador2 != null) zonaJugador2.limpiar();
+
+        // Resetear truco
+        resetearTruco();
+
+        // Alternar quien es mano
+        jugadorMano = (jugadorMano == TipoJugador.JUGADOR_1)
+                ? TipoJugador.JUGADOR_2
+                : TipoJugador.JUGADOR_1;
+
+        // Actualizar estado según quien empieza
+        estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
+                ? EstadoTurno.ESPERANDO_JUGADOR_1
+                : EstadoTurno.ESPERANDO_JUGADOR_2;
+
+        System.out.println("[SERVIDOR] Nueva ronda iniciada. Empieza: " + jugadorMano);
+    }
+
+    public void jugarCarta(TipoJugador jugadorQueJugo, Carta carta) {
+        if (ganador != null) return;
+
+        if (jugadorQueJugo == TipoJugador.JUGADOR_1) {
+            zonaJugador1.agregarCarta(carta);
+            cartasJugador1Antes++;
+        } else {
+            zonaJugador2.agregarCarta(carta);
+            cartasJugador2Antes++;
         }
 
-        if (rivalBot != null) {
-            rivalBot.update(delta);
-        }
+        if (cartasJugador1Antes == cartasJugador2Antes) {
+            System.out.println("[SERVIDOR] Fin de la mano " + (manoActual + 1) + ". Evaluando...");
 
-        if (esperandoFinalizacion) {
-            delayFinalizacion += delta;
-            if (delayFinalizacion >= 1.5f) {
-                estadoActual = EstadoTurno.FINALIZANDO_MANO;
-                esperandoFinalizacion = false;
-                delayFinalizacion = 0;
+            evaluarRonda();
+
+            manoActual++;
+
+            if (jugador1.getPuntos() >= PUNTOS_PARA_GANAR ||
+                    jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
+
+                estadoActual = EstadoTurno.PARTIDA_TERMINADA;
+
+                if (jugador1.getPuntos() > jugador2.getPuntos()) {
+                    ganador = jugador1;
+                } else if (jugador2.getPuntos() > jugador1.getPuntos()) {
+                    ganador = jugador2;
+                }
+
+                System.out.println("[SERVIDOR] Partida terminada. Ganador: " +
+                        (ganador != null ? ganador.getNombre() : "Empate"));
+
             } else {
-                return;
+                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
+                        ? EstadoTurno.ESPERANDO_JUGADOR_1
+                        : EstadoTurno.ESPERANDO_JUGADOR_2;
+
+                System.out.println("[SERVIDOR] Siguiente turno. Estado: " + estadoActual);
             }
-        }
+        } else {
+            estadoActual = (jugadorQueJugo == TipoJugador.JUGADOR_1)
+                    ? EstadoTurno.ESPERANDO_JUGADOR_2
+                    : EstadoTurno.ESPERANDO_JUGADOR_1;
 
-        switch (estadoActual) {
-            case ESPERANDO_JUGADOR_1:
-                int cartasJug1Actual = zonaJugador1.getCantidadCartas();
-
-                if (cartasJug1Actual > cartasJugador1Antes) {
-                    System.out.println(jugador1.getNombre() + " tiró una carta. Turno de " + jugador2.getNombre());
-                    cartasJugador1Antes = cartasJug1Actual;
-
-                    if (cartasJugador1Antes == cartasJugador2Antes) {
-                        manoActual++;
-                        System.out.println("=== Completada mano " + manoActual + " de " + MAX_MANOS + " ===");
-
-                        if (manoActual >= MAX_MANOS) {
-                            esperandoFinalizacion = true;
-                            delayFinalizacion = 0;
-                        } else {
-                            // Siguiente mano - quien es "mano" sigue empezando
-                            estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                                    ? EstadoTurno.ESPERANDO_JUGADOR_1
-                                    : EstadoTurno.ESPERANDO_JUGADOR_2;
-
-                            if (estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2 && rivalBot != null) {
-                                rivalBot.activarTurno();
-                            }
-                        }
-                    } else {
-                        estadoActual = EstadoTurno.ESPERANDO_JUGADOR_2;
-                        if (rivalBot != null) {
-                            rivalBot.activarTurno();
-                        }
-                    }
-                }
-                break;
-
-            case ESPERANDO_JUGADOR_2:
-                boolean turnoJugador2Completo = false;
-
-                if (rivalBot != null) {
-                    turnoJugador2Completo = !rivalBot.isEsperandoTurno();
-                } else {
-                    turnoJugador2Completo = zonaJugador2.getCantidadCartas() > cartasJugador2Antes;
-                }
-
-                if (turnoJugador2Completo) {
-                    int cartasJug2Actual = zonaJugador2.getCantidadCartas();
-
-                    if (cartasJug2Actual > cartasJugador2Antes) {
-                        System.out.println(jugador2.getNombre() + " tiró una carta. Turno de " + jugador1.getNombre());
-                        cartasJugador2Antes = cartasJug2Actual;
-
-                        if (cartasJugador1Antes == cartasJugador2Antes) {
-                            manoActual++;
-                            System.out.println("=== Completada mano " + manoActual + " de " + MAX_MANOS + " ===");
-
-                            if (manoActual >= MAX_MANOS) {
-                                esperandoFinalizacion = true;
-                                delayFinalizacion = 0;
-                            } else {
-                                // Siguiente mano - quien es "mano" sigue empezando
-                                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                                        ? EstadoTurno.ESPERANDO_JUGADOR_1
-                                        : EstadoTurno.ESPERANDO_JUGADOR_2;
-
-                                if (estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2 && rivalBot != null) {
-                                    rivalBot.activarTurno();
-                                }
-                            }
-                        } else {
-                            estadoActual = EstadoTurno.ESPERANDO_JUGADOR_1;
-                        }
-                    }
-                }
-                break;
-
-            case FINALIZANDO_MANO:
-                evaluarRonda();
-                break;
-
-            case PARTIDA_TERMINADA:
-                break;
+            System.out.println("[SERVIDOR] Carta jugada. Turno de: " + estadoActual);
         }
     }
 
     private void evaluarRonda() {
-        System.out.println("\n=== EVALUANDO RONDA ===");
-        System.out.println("Cartas " + jugador1.getNombre() + " en zona: " + zonaJugador1.getCantidadCartas());
-        System.out.println("Cartas " + jugador2.getNombre() + " en zona: " + zonaJugador2.getCantidadCartas());
+        System.out.println("\n[SERVIDOR] === EVALUANDO RONDA ===");
 
         ArrayList<Carta> cartasJug1 = zonaJugador1.getCartasJugadas();
         ArrayList<Carta> cartasJug2 = zonaJugador2.getCartasJugadas();
 
-        System.out.println("\nCartas de " + jugador1.getNombre() + ":");
-        for (Carta c : cartasJug1) {
-            System.out.println("  - " + c.getNombre() + " (Jerarquía: " + c.getJerarquia() + ")");
-        }
-
-        System.out.println("\nCartas de " + jugador2.getNombre() + ":");
-        for (Carta c : cartasJug2) {
-            System.out.println("  - " + c.getNombre() + " (Jerarquía: " + c.getJerarquia() + ")");
-        }
-
-        // Evaluar cada mano
         for (int i = 0; i < Math.min(cartasJug1.size(), cartasJug2.size()); i++) {
             Carta cartaJug1 = cartasJug1.get(i);
             Carta cartaJug2 = cartasJug2.get(i);
@@ -221,119 +207,43 @@ public class Partida {
             int puntosEnJuego = 1;
             if (trucoUsado && manoTrucoUsada == i) {
                 puntosEnJuego = 2;
-                System.out.println("¡TRUCO! Esta mano vale " + puntosEnJuego + " puntos");
+                System.out.println("[SERVIDOR] ¡TRUCO! Esta mano vale " + puntosEnJuego + " puntos");
             }
 
-            // Jerarquía menor = carta más fuerte
             if (cartaJug1.getJerarquia() < cartaJug2.getJerarquia()) {
                 jugador1.sumarPuntos(puntosEnJuego);
-                System.out.println("Mano " + (i+1) + ": GANÓ " + jugador1.getNombre() +
-                        " (+" + puntosEnJuego + " puntos)");
+                System.out.println("[SERVIDOR] Mano " + (i+1) + ": GANÓ " +
+                        jugador1.getNombre() + " (+" + puntosEnJuego + " puntos)");
             } else if (cartaJug1.getJerarquia() > cartaJug2.getJerarquia()) {
                 jugador2.sumarPuntos(puntosEnJuego);
-                System.out.println("Mano " + (i+1) + ": GANÓ " + jugador2.getNombre() +
-                        " (+" + puntosEnJuego + " puntos)");
+                System.out.println("[SERVIDOR] Mano " + (i+1) + ": GANÓ " +
+                        jugador2.getNombre() + " (+" + puntosEnJuego + " puntos)");
             } else {
-                System.out.println("Mano " + (i+1) + ": EMPATE (parda)");
+                System.out.println("[SERVIDOR] Mano " + (i+1) + ": EMPATE (parda)");
             }
         }
 
-        System.out.println("\nResultado: " + jugador1.getNombre() + " " +
+        System.out.println("[SERVIDOR] Resultado: " + jugador1.getNombre() + " " +
                 jugador1.getPuntos() + " - " +
                 jugador2.getPuntos() + " " + jugador2.getNombre());
-
-        if (jugador1.getPuntos() >= PUNTOS_PARA_GANAR) {
-            ganador = jugador1;
-            estadoActual = EstadoTurno.PARTIDA_TERMINADA;
-            System.out.println("\n🏆 ¡GANADOR: " + jugador1.getNombre() + "!");
-        } else if (jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
-            ganador = jugador2;
-            estadoActual = EstadoTurno.PARTIDA_TERMINADA;
-            System.out.println("\n🏆 ¡GANADOR: " + jugador2.getNombre() + "!");
-        }
     }
-
-    public boolean esTurnoJugador1() {
-        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_1;
-    }
-
-    public boolean esTurnoJugador() {
-        return esTurnoJugador1();
-    }
-
-    public boolean esTurnoJugador2() {
-        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2;
-    }
-
-    public void nuevaRonda() {
-        // Alternar quién es mano
-        jugadorMano = (jugadorMano == TipoJugador.JUGADOR_1)
-                ? TipoJugador.JUGADOR_2
-                : TipoJugador.JUGADOR_1;
-
-        estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                ? EstadoTurno.ESPERANDO_JUGADOR_1
-                : EstadoTurno.ESPERANDO_JUGADOR_2;
-
-        System.out.println("NUEVA RONDA - Empieza: " +
-                (jugadorMano == TipoJugador.JUGADOR_1 ? jugador1.getNombre() : jugador2.getNombre()));
-
-        cartasJugador1Antes = 0;
-        cartasJugador2Antes = 0;
-        manoActual = 0;
-
-        if (zonaJugador1 != null) zonaJugador1.limpiar();
-        if (zonaJugador2 != null) zonaJugador2.limpiar();
-
-        trucoUsado = false;
-        manoTrucoUsada = -1;
-        jugadorQueCanto = null;
-
-        // Si empieza el jugador 2 y es un bot, activarlo
-        if (jugadorMano == TipoJugador.JUGADOR_2 && rivalBot != null) {
-            rivalBot.activarTurno();
-        }
-    }
-
-    public int getManoActual() {
-        return manoActual;
-    }
-
-    // ✅ NUEVO: Verificar si es el turno del primero que tira en esta mano
-    public boolean esPrimerTurnoEnMano() {
-        // Es primer turno si nadie tiró aún en esta mano
-        return cartasJugador1Antes == cartasJugador2Antes;
-    }
-
-    // ✅ NUEVO: Verificar si el jugador 1 es quien empieza (es mano)
-    public boolean jugador1EmpiezaEstaMano() {
-        return jugadorMano == TipoJugador.JUGADOR_1;
-    }
-
 
     public boolean cantarTruco(TipoJugador jugador) {
-        // ✅ VALIDACIÓN SERVIDOR (Autoridad máxima)
-
-        // 1. Verificar si ya fue usado
         if (trucoUsado) {
             System.out.println("[SERVIDOR] Truco ya fue usado");
             return false;
         }
 
-        // 2. Verificar si es el primer turno (nadie jugó)
         if (!esPrimerTurnoEnMano()) {
-            System.out.println("[SERVIDOR] No es el primer turno, no se puede cantar truco");
+            System.out.println("[SERVIDOR] No es el primer turno");
             return false;
         }
 
-        // 3. Verificar si el jugador es el "Mano" (quien empieza)
         if (jugador != jugadorMano) {
             System.out.println("[SERVIDOR] Solo el jugador Mano puede cantar truco");
-            System.out.println("  Intentó: " + jugador + " | Es Mano: " + jugadorMano);
             return false;
         }
 
-        // 4. Si pasa todas las validaciones, marcar como usado
         trucoUsado = true;
         manoTrucoUsada = manoActual;
         jugadorQueCanto = jugador;
@@ -342,13 +252,29 @@ public class Partida {
                 ? jugador1.getNombre()
                 : jugador2.getNombre();
 
-        System.out.println("[SERVIDOR] ✅ " + nombreJugador + " CANTÓ TRUCO válido en mano " +
-                (manoActual + 1) + ". Vale 2 puntos.");
+        System.out.println("[SERVIDOR] ✅ " + nombreJugador +
+                " CANTÓ TRUCO válido en mano " + (manoActual + 1));
 
         return true;
     }
 
+    public boolean esPrimerTurnoEnMano() {
+        return cartasJugador1Antes == cartasJugador2Antes;
+    }
 
+    public void procesarJugadaServidor(TipoJugador jugadorQueJugo, int valor, Palo palo) {
+        Carta carta = new Carta(valor, palo);
+        jugarCarta(jugadorQueJugo, carta);
+    }
+
+    // Getters
+    public boolean esTurnoJugador1() {
+        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_1;
+    }
+
+    public boolean esTurnoJugador2() {
+        return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2;
+    }
 
     public boolean isTrucoUsado() {
         return trucoUsado;
@@ -357,75 +283,29 @@ public class Partida {
     public boolean isTrucoActivoEnManoActual() {
         return trucoUsado && manoTrucoUsada == manoActual;
     }
-    public void procesarJugadaServidor(TipoJugador jugadorQueJugo, int valor, Palo palo) {
-        Carta carta = new Carta(valor, palo);
 
-        jugarCarta(jugadorQueJugo, carta);
+    public int getManoActual() {
+        return manoActual;
     }
 
-    public void jugarCarta(TipoJugador jugadorQueJugo, Carta carta) {
-        if (ganador != null) return;
-
-        // 1. Agregar carta a la zona de juego y actualizar contadores
-        if (jugadorQueJugo == TipoJugador.JUGADOR_1) {
-            zonaJugador1.agregarCarta(carta);
-            cartasJugador1Antes++; // 1 carta jugada por J1
-        } else {
-            zonaJugador2.agregarCarta(carta);
-            cartasJugador2Antes++; // 1 carta jugada por J2
-        }
-
-        // 2. Lógica de Cambio de Turno / Fin de Mano
-        if (cartasJugador1Antes == cartasJugador2Antes) {
-            System.out.println("[PARTIDA] Fin de la mano " + (manoActual + 1) + ". Evaluando...");
-
-            // Llamar a la lógica de puntuación y ganadores de mano
-            evaluarRonda(); // Esta función llama a 'evaluarRonda()' que determinará el ganador final si lo hay.
-
-            cartasJugador1Antes = 0;
-            cartasJugador2Antes = 0;
-            if (zonaJugador1 != null) zonaJugador1.limpiar();
-            if (zonaJugador2 != null) zonaJugador2.limpiar();
-
-            manoActual++; // Incrementamos la mano para la lógica de la siguiente jugada
-
-            if (jugador1.getPuntos() >= PUNTOS_PARA_GANAR || jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
-                // FIN DE PARTIDA
-                estadoActual = EstadoTurno.PARTIDA_TERMINADA;
-                // Lógica para determinar el ganador final
-                if (jugador1.getPuntos() > jugador2.getPuntos()) ganador = jugador1;
-                else if (jugador2.getPuntos() > jugador1.getPuntos()) ganador = jugador2;
-
-                System.out.println("[PARTIDA] Partida terminada. Ganador: " + (ganador != null ? ganador.getNombre() : "Empate"));
-
-            } else if (manoActual >= MAX_MANOS) {
-                nuevaRonda();
-                System.out.println("[PARTIDA] Mano Máxima alcanzada. Iniciando NUEVA RONDA.");
-            } else {
-                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                        ? EstadoTurno.ESPERANDO_JUGADOR_1
-                        : EstadoTurno.ESPERANDO_JUGADOR_2;
-                System.out.println("[PARTIDA] Empezando mano " + (manoActual + 1) + ". Turno de: " + estadoActual);
-            }
-        } else {
-            estadoActual = (jugadorQueJugo == TipoJugador.JUGADOR_1)
-                    ? EstadoTurno.ESPERANDO_JUGADOR_2 // Cambia el turno al J2
-                    : EstadoTurno.ESPERANDO_JUGADOR_1; // Cambia el turno al J1
-
-            System.out.println("[PARTIDA] Carta jugada. Turno de: " + estadoActual);
-        }
+    public int getPuntosJ1() {
+        return jugador1.getPuntos();
     }
 
-
-    public int getPuntosJ1() { return jugador1.getPuntos(); }
-    public int getPuntosJ2() { return jugador2.getPuntos(); }
+    public int getPuntosJ2() {
+        return jugador2.getPuntos();
+    }
 
     public EstadoTurno getEstadoActual() {
         return estadoActual;
     }
+
     public TipoJugador getJugadorMano() {
         return jugadorMano;
     }
 
+    public Jugador getGanador() {
+        return ganador;
+    }
 
 }
