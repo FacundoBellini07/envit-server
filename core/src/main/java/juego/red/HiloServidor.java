@@ -134,9 +134,24 @@ public class HiloServidor extends Thread {
     }
 
     private void procesarTruco(DatagramPacket dp) {
-        System.out.println("[SERVIDOR] TRUCO cantado");
+        System.out.println("[SERVIDOR] TRUCO recibido");
 
-        enviarEstadoActual();
+        int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
+        if (idx == -1) {
+            System.out.println("[SERVIDOR] Cliente desconocido intentó cantar truco");
+            return;
+        }
+
+        TipoJugador jugadorQueCanto = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+        int rival = (idx == 0) ? 1 : 0;
+
+        enviarMensaje(
+                "TRUCO_RIVAL",
+                clientes[rival].getIp(),
+                clientes[rival].getPuerto()
+        );
+
+
     }
 
     private void enviarEstadoActual() {

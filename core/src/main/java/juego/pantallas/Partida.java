@@ -265,18 +265,6 @@ public class Partida {
         return estadoActual == EstadoTurno.ESPERANDO_JUGADOR_2;
     }
 
-    public boolean rondaTerminada() {
-        return estadoActual == EstadoTurno.FINALIZANDO_MANO && ganador == null;
-    }
-
-    public boolean partidaTerminada() {
-        return estadoActual == EstadoTurno.PARTIDA_TERMINADA;
-    }
-
-    public Jugador getGanador() {
-        return ganador;
-    }
-
     public void nuevaRonda() {
         // Alternar quién es mano
         jugadorMano = (jugadorMano == TipoJugador.JUGADOR_1)
@@ -322,24 +310,30 @@ public class Partida {
         return jugadorMano == TipoJugador.JUGADOR_1;
     }
 
+
     public boolean cantarTruco(TipoJugador jugador) {
-        // ✅ NUEVO: Solo puede cantar truco quien tira primero
-        if (!esPrimerTurnoEnMano()) {
-            System.out.println("Solo puede cantar truco quien tira primero en la mano");
-            return false;
-        }
+        // ✅ VALIDACIÓN SERVIDOR (Autoridad máxima)
 
-
-        if (jugador == TipoJugador.JUGADOR_1 && jugadorMano != TipoJugador.JUGADOR_1) {
-            System.out.println("No es tu turno para cantar truco");
-            return false;
-        }
-
+        // 1. Verificar si ya fue usado
         if (trucoUsado) {
-            System.out.println("El truco ya fue cantado en esta ronda");
+            System.out.println("[SERVIDOR] Truco ya fue usado");
             return false;
         }
 
+        // 2. Verificar si es el primer turno (nadie jugó)
+        if (!esPrimerTurnoEnMano()) {
+            System.out.println("[SERVIDOR] No es el primer turno, no se puede cantar truco");
+            return false;
+        }
+
+        // 3. Verificar si el jugador es el "Mano" (quien empieza)
+        if (jugador != jugadorMano) {
+            System.out.println("[SERVIDOR] Solo el jugador Mano puede cantar truco");
+            System.out.println("  Intentó: " + jugador + " | Es Mano: " + jugadorMano);
+            return false;
+        }
+
+        // 4. Si pasa todas las validaciones, marcar como usado
         trucoUsado = true;
         manoTrucoUsada = manoActual;
         jugadorQueCanto = jugador;
@@ -348,11 +342,13 @@ public class Partida {
                 ? jugador1.getNombre()
                 : jugador2.getNombre();
 
-        System.out.println("¡" + nombreJugador + " CANTÓ TRUCO! La mano " +
-                (manoActual + 1) + " vale 2 puntos");
+        System.out.println("[SERVIDOR] ✅ " + nombreJugador + " CANTÓ TRUCO válido en mano " +
+                (manoActual + 1) + ". Vale 2 puntos.");
 
         return true;
     }
+
+
 
     public boolean isTrucoUsado() {
         return trucoUsado;
@@ -363,47 +359,10 @@ public class Partida {
     }
     public void procesarJugadaServidor(TipoJugador jugadorQueJugo, int valor, Palo palo) {
         Carta carta = new Carta(valor, palo);
-        if (jugadorQueJugo == TipoJugador.JUGADOR_1) {
-            zonaJugador1.agregarCarta(carta);
-            cartasJugador1Antes = zonaJugador1.getCantidadCartas();
-        } else {
-            zonaJugador2.agregarCarta(carta);
-            cartasJugador2Antes = zonaJugador2.getCantidadCartas();
-        }
 
-        // 3. Verificar lógica de turno (copiada y adaptada de tu update)
-        if (cartasJugador1Antes == cartasJugador2Antes) {
-            // Ambos jugaron, fin de la mano actual
-            manoActual++;
-
-            evaluarRonda();
-
-            if (manoActual >= MAX_MANOS || ganador != null) {
-                estadoActual = EstadoTurno.PARTIDA_TERMINADA; // O finalizando
-            } else {
-                // Siguiente mano
-                estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
-                        ? EstadoTurno.ESPERANDO_JUGADOR_1
-                        : EstadoTurno.ESPERANDO_JUGADOR_2;
-            }
-        } else {
-            // Falta que juegue el otro
-            estadoActual = (jugadorQueJugo == TipoJugador.JUGADOR_1)
-                    ? EstadoTurno.ESPERANDO_JUGADOR_2
-                    : EstadoTurno.ESPERANDO_JUGADOR_1;
-        }
+        jugarCarta(jugadorQueJugo, carta);
     }
 
-    // Necesitas getters para que el servidor pueda leer el estado y enviarlo
-    public int getPuntosJ1() { return jugador1.getPuntos(); }
-    public int getPuntosJ2() { return jugador2.getPuntos(); }
-
-    public EstadoTurno getEstadoActual() {
-        return estadoActual;
-    }
-    public TipoJugador getJugadorMano() {
-        return jugadorMano;
-    }
     public void jugarCarta(TipoJugador jugadorQueJugo, Carta carta) {
         if (ganador != null) return;
 
@@ -418,25 +377,19 @@ public class Partida {
 
         // 2. Lógica de Cambio de Turno / Fin de Mano
         if (cartasJugador1Antes == cartasJugador2Antes) {
-            // **********************************************
-            // AMBOS JUGARON UNA CARTA: FIN DE MANO
-            // **********************************************
-
             System.out.println("[PARTIDA] Fin de la mano " + (manoActual + 1) + ". Evaluando...");
 
             // Llamar a la lógica de puntuación y ganadores de mano
-            // (Debes asegurar que 'evaluarRonda()' existe y funciona)
-            evaluarRonda();
+            evaluarRonda(); // Esta función llama a 'evaluarRonda()' que determinará el ganador final si lo hay.
 
-            // Resetear contadores y limpiar mesa visualmente
             cartasJugador1Antes = 0;
             cartasJugador2Antes = 0;
-            zonaJugador1.limpiar();
-            zonaJugador2.limpiar();
+            if (zonaJugador1 != null) zonaJugador1.limpiar();
+            if (zonaJugador2 != null) zonaJugador2.limpiar();
 
-            manoActual++;
+            manoActual++; // Incrementamos la mano para la lógica de la siguiente jugada
 
-            if (manoActual >= MAX_MANOS || jugador1.getPuntos() >= PUNTOS_PARA_GANAR || jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
+            if (jugador1.getPuntos() >= PUNTOS_PARA_GANAR || jugador2.getPuntos() >= PUNTOS_PARA_GANAR) {
                 // FIN DE PARTIDA
                 estadoActual = EstadoTurno.PARTIDA_TERMINADA;
                 // Lógica para determinar el ganador final
@@ -445,24 +398,33 @@ public class Partida {
 
                 System.out.println("[PARTIDA] Partida terminada. Ganador: " + (ganador != null ? ganador.getNombre() : "Empate"));
 
+            } else if (manoActual >= MAX_MANOS) {
+                nuevaRonda();
+                System.out.println("[PARTIDA] Mano Máxima alcanzada. Iniciando NUEVA RONDA.");
             } else {
-                // AVANZAR A LA SIGUIENTE MANO: Vuelve a empezar quien es 'jugadorMano' (o quien ganó la mano anterior)
-                // Asumo que el ganador de la mano anterior establece el nuevo 'jugadorMano' en evaluarRonda().
                 estadoActual = (jugadorMano == TipoJugador.JUGADOR_1)
                         ? EstadoTurno.ESPERANDO_JUGADOR_1
                         : EstadoTurno.ESPERANDO_JUGADOR_2;
                 System.out.println("[PARTIDA] Empezando mano " + (manoActual + 1) + ". Turno de: " + estadoActual);
             }
         } else {
-            // **********************************************
-            // SOLO JUGÓ UNO: CAMBIO DE TURNO
-            // **********************************************
             estadoActual = (jugadorQueJugo == TipoJugador.JUGADOR_1)
                     ? EstadoTurno.ESPERANDO_JUGADOR_2 // Cambia el turno al J2
                     : EstadoTurno.ESPERANDO_JUGADOR_1; // Cambia el turno al J1
 
             System.out.println("[PARTIDA] Carta jugada. Turno de: " + estadoActual);
         }
+    }
+
+
+    public int getPuntosJ1() { return jugador1.getPuntos(); }
+    public int getPuntosJ2() { return jugador2.getPuntos(); }
+
+    public EstadoTurno getEstadoActual() {
+        return estadoActual;
+    }
+    public TipoJugador getJugadorMano() {
+        return jugadorMano;
     }
 
 
