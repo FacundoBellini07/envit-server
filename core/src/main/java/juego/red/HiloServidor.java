@@ -153,18 +153,16 @@ public class HiloServidor extends Thread {
             int valor = Integer.parseInt(partes[1]);
             Palo palo = Palo.valueOf(partes[2]);
 
-            System.out.println("[SERVIDOR] Carta jugada: " + valor + " de " + palo);
-
             int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
             if (idx == -1) return;
 
             TipoJugador jugadorQueJugo = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
 
-            // Procesar la jugada en la lógica del servidor
+            // 1. Procesar la jugada en la lógica del servidor
             Carta cartaJugada = new Carta(valor, palo);
             partidaLogica.jugarCarta(jugadorQueJugo, cartaJugada);
 
-            // Notificar al rival
+            // 2. Notificar al rival
             int rival = (idx == 0) ? 1 : 0;
             enviarMensaje(
                     "CARTA_RIVAL:" + valor + ":" + palo.name(),
@@ -172,14 +170,20 @@ public class HiloServidor extends Thread {
                     clientes[rival].getPuerto()
             );
 
-            // Verificar si se completó la ronda (3 cartas jugadas)
+            // 3. Enviar estado actualizado PRIMERO
+            enviarEstadoActual();
+
+            // 4. DESPUÉS verificar si se completó la ronda
             if (partidaLogica.rondaCompletada()) {
                 System.out.println("[SERVIDOR] Ronda completada, iniciando nueva ronda");
+                // Esperar un poco para que los clientes procesen el estado
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
                 iniciarNuevaRonda();
             }
-
-            // Enviar estado actualizado
-            enviarEstadoActual();
         }
     }
 
