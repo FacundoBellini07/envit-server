@@ -11,7 +11,8 @@ import java.util.Random;
 
 public class Partida {
 
-    private ArrayList<Carta> mazoRevuelto = new ArrayList<>();
+    private ArrayList<Carta> mazoCompeto = new ArrayList<>(); // ✅ NUEVO: Mazo completo sin modificar
+    private ArrayList<Carta> mazoRevuelto = new ArrayList<>(); // ✅ Para repartir
     private int indiceMazo = 0;
 
     private EstadoTurno estadoActual;
@@ -41,11 +42,26 @@ public class Partida {
 
     public Partida() {
         this.estadoActual = EstadoTurno.ESPERANDO_JUGADOR_1;
+
+        // ✅ NUEVO: Crear mazo completo UNA SOLA VEZ
         Mazo mazoOriginal = new Mazo();
         for (int i = 0; i < mazoOriginal.getCantCartas(); i++) {
-            mazoRevuelto.add(mazoOriginal.getCarta(i));
+            mazoCompeto.add(mazoOriginal.getCarta(i));
         }
+
+        // Inicializar mazoRevuelto como copia
+        reinicializarMazo();
+    }
+
+    /**
+     * ✅ NUEVO: Reinicializar el mazo revuelto cuando se acaba
+     */
+    private void reinicializarMazo() {
+        mazoRevuelto.clear();
+        mazoRevuelto.addAll(mazoCompeto);
         Collections.shuffle(mazoRevuelto);
+        indiceMazo = 0;
+        System.out.println("[SERVIDOR] Mazo barajado y listo para repartir");
     }
 
     public void inicializar(ZonaJuego zonaJug1, ZonaJuego zonaJug2, RivalBot bot,
@@ -78,10 +94,13 @@ public class Partida {
         this.jugadorQueCanto = null;
     }
 
+    /**
+     * ✅ MEJORADO: Repartir cartas con mejor lógica
+     */
     public void repartirCartas(Jugador jugador1, Jugador jugador2) {
+        // ✅ NUEVO: Si no hay cartas suficientes, reinicializar el mazo
         if (indiceMazo + 6 > mazoRevuelto.size()) {
-            indiceMazo = 0;
-            Collections.shuffle(mazoRevuelto);
+            reinicializarMazo();
         }
 
         jugador1.limpiarMazo();
@@ -92,7 +111,7 @@ public class Partida {
             jugador2.agregarCarta(mazoRevuelto.get(indiceMazo++));
         }
 
-        System.out.println("[SERVIDOR] Cartas repartidas a ambos jugadores");
+        System.out.println("[SERVIDOR] Cartas repartidas a ambos jugadores. Índice mazo: " + indiceMazo + "/" + mazoRevuelto.size());
     }
 
     public Carta[] getCartasJugador1() {
@@ -106,6 +125,7 @@ public class Partida {
     public boolean rondaCompletada() {
         return manoActual >= MAX_MANOS;
     }
+
     public void repartirNuevasCartas() {
         repartirCartas(jugador1, jugador2);
 
@@ -215,7 +235,6 @@ public class Partida {
                     jugador2.getNombre() + " (+" + puntosEnJuego + " puntos)");
         } else {
             System.out.println("[SERVIDOR] Mano " + (i+1) + ": EMPATE (parda)");
-            // Aquí podrías implementar la lógica de quién gana en parda si lo necesitas
         }
 
         System.out.println("[SERVIDOR] Resultado Parcial: " + jugador1.getNombre() + " " +
@@ -252,6 +271,7 @@ public class Partida {
 
         return true;
     }
+
     public void resetearTotal() {
         System.out.println("[SERVIDOR] Realizando reseteo total de la partida...");
 
@@ -261,16 +281,15 @@ public class Partida {
         this.cartasJugador1Antes = 0;
         this.cartasJugador2Antes = 0;
 
-        // 2. Reiniciar el mazo (Barajar de nuevo)
-        this.indiceMazo = 0;
-        Collections.shuffle(mazoRevuelto);
+        // 2. ✅ MEJORADO: Reinicializar el mazo (barajar completamente)
+        reinicializarMazo();
 
         // 3. Resetear Truco
         resetearTruco();
 
         // 4. Limpiar Jugadores (Puntos y Manos)
         if (jugador1 != null) {
-            jugador1.setPuntos(0); // Asegúrate de tener este setter en Jugador
+            jugador1.setPuntos(0);
             jugador1.limpiarMazo();
         }
         if (jugador2 != null) {

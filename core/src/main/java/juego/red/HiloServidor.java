@@ -21,19 +21,22 @@ public class HiloServidor extends Thread {
     private Partida partidaLogica;
     private boolean esperandoNuevaRonda = false;
 
+    // ✅ NUEVO: Flag para saber si la partida está en progreso
+    private boolean partidaEnProgreso = false;
+
     public HiloServidor(Partida partida) {
         this.partidaLogica = partida;
         try {
             conexion = new DatagramSocket(30243);
             System.out.println("[SERVIDOR] Escuchando en puerto 30243");
 
-            // ✅ NUEVO: Detector de desconexiones forzadas
+            // Detector de desconexiones forzadas
             new Timer().scheduleAtFixedRate(new TimerTask() {
                 @Override
                 public void run() {
                     chequearDesconexiones();
                 }
-            }, 2000, 1000); // Revisa cada 1 segundo
+            }, 2000, 1000);
 
         } catch (SocketException e) {
             e.printStackTrace();
@@ -57,6 +60,20 @@ public class HiloServidor extends Thread {
             enviarMensaje(mensaje, clientes[1].getIp(), clientes[1].getPuerto());
         }
     }
+
+    /**
+     * ✅ MEJORADO: Vaciar la sala del servidor
+     */
+    private void vaciarSala() {
+        System.out.println("[SERVIDOR] Vaciando sala...");
+        cantClientes = 0;
+        clientes = new Cliente[2];
+        esperandoNuevaRonda = false;
+        partidaEnProgreso = false; // ✅ NUEVO: Resetear flag de partida
+        partidaLogica.resetearTotal();
+        System.out.println("[SERVIDOR] ✅ Sala vaciada. Esperando nuevos jugadores...");
+    }
+
     private void chequearDesconexiones() {
         if (cantClientes == 0) return;
         long tiempoActual = System.currentTimeMillis();
@@ -70,21 +87,17 @@ public class HiloServidor extends Thread {
                 if (tiempoActual - cliente.getUltimoMensaje() > TIEMPO_LIMITE) {
                     System.out.println("[SERVIDOR] 🚨 Cliente " + i + " ha excedido el tiempo de espera (TIMEOUT). Forzando desconexión.");
                     desconexionDetectada = true;
-                    // Al detectar una desconexión, no necesitamos seguir chequeando
                     break;
                 }
             }
         }
 
         if (desconexionDetectada) {
-            enviarAmbos("RIVAL_SE_FUE");
-
-            cantClientes = 0;
-            clientes = new Cliente[2]; // Limpiar el array para recibir nuevas conexiones
-            esperandoNuevaRonda = false; // Liberar cualquier bloqueo del servidor
-            partidaLogica.resetearTotal();
-
-            System.out.println("[SERVIDOR] ✅ Desconexión forzada completada. Sala reiniciada. Esperando jugadores...");
+            // ✅ MEJORADO: Solo enviar RIVAL_SE_FUE si la partida estaba en progreso
+            if (partidaEnProgreso) {
+                enviarAmbos("RIVAL_SE_FUE");
+            }
+            vaciarSala();
         }
     }
 
@@ -118,35 +131,43 @@ public class HiloServidor extends Thread {
         if (mensaje.equals("Conexion")) {
             procesarConexion(dp);
         }
-
         else if (mensaje.startsWith("CARTA_JUGADA:")) {
             procesarCartaJugada(dp, mensaje);
-        } else if (mensaje.equals("TRUCO")) {
+        }
+        else if (mensaje.equals("TRUCO")) {
             procesarTruco(dp);
         }
     }
 
     private void procesarConexion(DatagramPacket dp) {
-
-        if (cantClientes < 2) {
-            clientes[cantClientes++] = new Cliente(dp.getAddress(), dp.getPort());
-            int idx = cantClientes - 1;
-            enviarMensaje("OK", clientes[idx].getIp(), clientes[idx].getPuerto());
-            enviarMensaje("ID:" + idx, clientes[idx].getIp(), clientes[idx].getPuerto());
-
-            if (cantClientes == 2) {
-                iniciarPartida();
-            }
-        }
-        else {
+        // ✅ MEJORADO: Si la sala está llena, solo responder FULL
+        if (cantClientes >= 2) {
             System.out.println("[SERVIDOR] Rechazando conexión (FULL)");
             enviarMensaje("FULL", dp.getAddress(), dp.getPort());
             return;
+        }
+
+        // ✅ MEJORADO: Si hay espacio, agregar cliente
+        clientes[cantClientes] = new Cliente(dp.getAddress(), dp.getPort());
+        int idx = cantClientes;
+        cantClientes++;
+
+        enviarMensaje("OK", clientes[idx].getIp(), clientes[idx].getPuerto());
+        enviarMensaje("ID:" + idx, clientes[idx].getIp(), clientes[idx].getPuerto());
+
+        System.out.println("[SERVIDOR] Jugador " + idx + " conectado. Total: " + cantClientes + "/2");
+
+        // ✅ Si ya hay 2 jugadores, iniciar partida
+        if (cantClientes == 2) {
+            iniciarPartida();
         }
     }
 
     private void iniciarPartida() {
         System.out.println("[SERVIDOR] Iniciando partida con 2 jugadores");
+
+        // ✅ NUEVO: Marcar que la partida está en progreso
+        partidaEnProgreso = true;
 
         partidaLogica.repartirNuevasCartas();
 
@@ -217,14 +238,25 @@ public class HiloServidor extends Thread {
             );
 
             enviarEstadoActual();
+
+            // Si la partida terminó
             if (partidaLogica.getEstadoActual() == EstadoTurno.PARTIDA_TERMINADA) {
                 Jugador ganador = partidaLogica.getGanador();
                 int idGanador = (ganador == partidaLogica.getJugador1()) ? 0 : 1;
 
                 System.out.println("[SERVIDOR] ¡PARTIDA TERMINADA! Ganó ID: " + idGanador);
                 enviarAmbos("GANADOR:" + idGanador);
+
+                // ✅ NUEVO: Esperar 3 segundos y vaciar la sala
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        vaciarSala();
+                    }
+                }, 3000);
             }
-           else if (partidaLogica.rondaCompletada()) {
+            // Si se completó una ronda (pero no la partida), iniciar nueva ronda
+            else if (partidaLogica.rondaCompletada()) {
                 System.out.println("[SERVIDOR] ¡Ronda completada! Esperando 2s para la siguiente...");
 
                 esperandoNuevaRonda = true;
@@ -233,7 +265,6 @@ public class HiloServidor extends Thread {
                     @Override
                     public void run() {
                         iniciarNuevaRonda();
-
                         esperandoNuevaRonda = false;
                     }
                 }, 2000);
@@ -270,7 +301,6 @@ public class HiloServidor extends Thread {
         if (trucoValido) {
             System.out.println("[SERVIDOR] ✅ TRUCO ACEPTADO");
 
-            // Notificar al rival
             int rival = (idx == 0) ? 1 : 0;
             enviarMensaje(
                     "TRUCO_RIVAL",
@@ -278,7 +308,6 @@ public class HiloServidor extends Thread {
                     clientes[rival].getPuerto()
             );
 
-            // Enviar estado actualizado a AMBOS (incluye info del truco)
             enviarEstadoActual();
         } else {
             enviarEstadoActual();
@@ -291,7 +320,6 @@ public class HiloServidor extends Thread {
         EstadoTurno estado = partidaLogica.getEstadoActual();
         String jugadorManoStr = partidaLogica.getJugadorMano().name();
 
-        // ✅ NUEVO: Incluir estado del truco en el mensaje
         String mensaje = "ESTADO:" +
                 partidaLogica.getManoActual() + ":" +
                 partidaLogica.getPuntosJ1() + ":" +
@@ -308,12 +336,13 @@ public class HiloServidor extends Thread {
 
     private int getIndiceCliente(InetAddress ip, int puerto) {
         for (int i = 0; i < cantClientes; i++) {
-            if (clientes[i].getIp().equals(ip) && clientes[i].getPuerto() == puerto) {
+            if (clientes[i] != null && clientes[i].getIp().equals(ip) && clientes[i].getPuerto() == puerto) {
                 return i;
             }
         }
         return -1;
     }
+
     public void detener() {
         fin = true;
         if (conexion != null && !conexion.isClosed()) {
