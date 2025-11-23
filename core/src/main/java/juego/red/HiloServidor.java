@@ -21,8 +21,10 @@ public class HiloServidor extends Thread {
     private Partida partidaLogica;
     private boolean esperandoNuevaRonda = false;
 
-    // ✅ NUEVO: Flag para saber si la partida está en progreso
     private boolean partidaEnProgreso = false;
+
+    // ✅ NUEVO: Timer para el checker de desconexiones
+    private Timer timerDesconexiones;
 
     public HiloServidor(Partida partida) {
         this.partidaLogica = partida;
@@ -31,15 +33,33 @@ public class HiloServidor extends Thread {
             System.out.println("[SERVIDOR] Escuchando en puerto 30243");
 
             // Detector de desconexiones forzadas
-            new Timer().scheduleAtFixedRate(new TimerTask() {
-                @Override
-                public void run() {
-                    chequearDesconexiones();
-                }
-            }, 2000, 1000);
+            iniciarCheckerDesconexiones();
 
         } catch (SocketException e) {
             e.printStackTrace();
+        }
+    }
+
+    // ✅ NUEVO: Método para iniciar el checker
+    private void iniciarCheckerDesconexiones() {
+        if (timerDesconexiones != null) {
+            timerDesconexiones.cancel();
+        }
+
+        timerDesconexiones = new Timer();
+        timerDesconexiones.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                chequearDesconexiones();
+            }
+        }, 2000, 1000);
+    }
+
+    // ✅ NUEVO: Método para detener el checker
+    private void detenerCheckerDesconexiones() {
+        if (timerDesconexiones != null) {
+            timerDesconexiones.cancel();
+            timerDesconexiones = null;
         }
     }
 
@@ -61,16 +81,22 @@ public class HiloServidor extends Thread {
         }
     }
 
-    /**
-     * ✅ MEJORADO: Vaciar la sala del servidor
-     */
     private void vaciarSala() {
         System.out.println("[SERVIDOR] Vaciando sala...");
-        cantClientes = 0;
-        clientes = new Cliente[2];
+
+        // 1. Primero detenemos el juego para evitar que el timer actual mate a alguien
+        partidaEnProgreso = false;
         esperandoNuevaRonda = false;
-        partidaEnProgreso = false; // ✅ NUEVO: Resetear flag de partida
+
+        // 2. Reseteamos datos
+        cantClientes = 0;
+        clientes = new Cliente[2]; // Borra referencias a clientes viejos
         partidaLogica.resetearTotal();
+
+        // 3. Reiniciar el checker de desconexiones DESDE CERO
+        detenerCheckerDesconexiones();
+        iniciarCheckerDesconexiones();
+
         System.out.println("[SERVIDOR] ✅ Sala vaciada. Esperando nuevos jugadores...");
     }
 
@@ -79,25 +105,27 @@ public class HiloServidor extends Thread {
         long tiempoActual = System.currentTimeMillis();
         final long TIEMPO_LIMITE = 3000;
 
-        boolean desconexionDetectada = false;
-
         for (int i = 0; i < cantClientes; i++) {
             Cliente cliente = clientes[i];
             if (cliente != null) {
                 if (tiempoActual - cliente.getUltimoMensaje() > TIEMPO_LIMITE) {
-                    System.out.println("[SERVIDOR] 🚨 Cliente " + i + " ha excedido el tiempo de espera (TIMEOUT). Forzando desconexión.");
-                    desconexionDetectada = true;
-                    break;
+                    System.out.println("[SERVIDOR] 🚨 Cliente " + i + " ha excedido el tiempo de espera (TIMEOUT).");
+
+                    // ✅ Si está EN PROGRESO: desconectar a AMBOS y vaciar
+                    if (partidaEnProgreso) {
+                        System.out.println("[SERVIDOR] ⚠️ Partida en progreso. Enviando RIVAL_SE_FUE a ambos y vaciando sala.");
+                        enviarAmbos("RIVAL_SE_FUE");
+                        vaciarSala();
+                        return;
+                    }
+                    // ✅ Si NO está en progreso: solo vaciar sin enviar mensaje
+                    else {
+                        System.out.println("[SERVIDOR] Partida no en progreso. Solo vaciando sala.");
+                        vaciarSala();
+                        return;
+                    }
                 }
             }
-        }
-
-        if (desconexionDetectada) {
-            // ✅ MEJORADO: Solo enviar RIVAL_SE_FUE si la partida estaba en progreso
-            if (partidaEnProgreso) {
-                enviarAmbos("RIVAL_SE_FUE");
-            }
-            vaciarSala();
         }
     }
 
@@ -140,33 +168,50 @@ public class HiloServidor extends Thread {
     }
 
     private void procesarConexion(DatagramPacket dp) {
-        // ✅ MEJORADO: Si la sala está llena, solo responder FULL
-        if (cantClientes >= 2) {
+        // Si hay espacio, aceptamos
+        if (cantClientes < 2) {
+            // ✅ IMPORTANTE: Verificar si el cliente ya existe (por IP/Puerto) para no duplicarlo
+            // aunque con vaciarSala() esto es raro, es buena práctica.
+            int idxExistente = getIndiceCliente(dp.getAddress(), dp.getPort());
+
+            if (idxExistente != -1) {
+                // Si ya existe (spam de conexión), solo reenviamos el OK pero no agregamos uno nuevo
+                System.out.println("[SERVIDOR] Cliente ya conectado, reenviando OK.");
+                enviarMensaje("OK", clientes[idxExistente].getIp(), clientes[idxExistente].getPuerto());
+                enviarMensaje("ID:" + idxExistente, clientes[idxExistente].getIp(), clientes[idxExistente].getPuerto());
+                return;
+            }
+
+            clientes[cantClientes] = new Cliente(dp.getAddress(), dp.getPort());
+            // Asegurar que el timestamp inicial es AHORA MISMO
+            clientes[cantClientes].actualizarUltimoMensaje();
+
+            int idx = cantClientes;
+            cantClientes++;
+
+            enviarMensaje("OK", clientes[idx].getIp(), clientes[idx].getPuerto());
+            enviarMensaje("ID:" + idx, clientes[idx].getIp(), clientes[idx].getPuerto());
+
+            System.out.println("[SERVIDOR] Jugador " + idx + " conectado. Total: " + cantClientes + "/2");
+
+            if (cantClientes == 2 && !partidaEnProgreso) {
+                // Pequeña pausa antes de iniciar para asegurar que ambos clientes procesaron el "OK"
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        if (cantClientes == 2) iniciarPartida();
+                    }
+                }, 500);
+            }
+        } else {
             System.out.println("[SERVIDOR] Rechazando conexión (FULL)");
             enviarMensaje("FULL", dp.getAddress(), dp.getPort());
-            return;
-        }
-
-        // ✅ MEJORADO: Si hay espacio, agregar cliente
-        clientes[cantClientes] = new Cliente(dp.getAddress(), dp.getPort());
-        int idx = cantClientes;
-        cantClientes++;
-
-        enviarMensaje("OK", clientes[idx].getIp(), clientes[idx].getPuerto());
-        enviarMensaje("ID:" + idx, clientes[idx].getIp(), clientes[idx].getPuerto());
-
-        System.out.println("[SERVIDOR] Jugador " + idx + " conectado. Total: " + cantClientes + "/2");
-
-        // ✅ Si ya hay 2 jugadores, iniciar partida
-        if (cantClientes == 2) {
-            iniciarPartida();
         }
     }
 
     private void iniciarPartida() {
         System.out.println("[SERVIDOR] Iniciando partida con 2 jugadores");
 
-        // ✅ NUEVO: Marcar que la partida está en progreso
         partidaEnProgreso = true;
 
         partidaLogica.repartirNuevasCartas();
@@ -247,13 +292,15 @@ public class HiloServidor extends Thread {
                 System.out.println("[SERVIDOR] ¡PARTIDA TERMINADA! Ganó ID: " + idGanador);
                 enviarAmbos("GANADOR:" + idGanador);
 
-                // ✅ NUEVO: Esperar 3 segundos y vaciar la sala
+                // Esperar 3 segundos y vaciar la sala
                 new Timer().schedule(new TimerTask() {
                     @Override
                     public void run() {
                         vaciarSala();
                     }
                 }, 3000);
+
+                partidaEnProgreso = false;
             }
             // Si se completó una ronda (pero no la partida), iniciar nueva ronda
             else if (partidaLogica.rondaCompletada()) {
@@ -345,6 +392,7 @@ public class HiloServidor extends Thread {
 
     public void detener() {
         fin = true;
+        detenerCheckerDesconexiones();
         if (conexion != null && !conexion.isClosed()) {
             conexion.close();
         }
