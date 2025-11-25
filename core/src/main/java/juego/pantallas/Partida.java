@@ -2,7 +2,6 @@ package juego.pantallas;
 
 import juego.elementos.*;
 import juego.personajes.Jugador;
-import juego.personajes.RivalBot;
 import juego.personajes.TipoJugador;
 
 import java.util.ArrayList;
@@ -23,7 +22,6 @@ public class Partida {
     private ZonaJuego zonaJugador1;
     private ZonaJuego zonaJugador2;
 
-    private RivalBot rivalBot;
     private Jugador jugador1;
     private Jugador jugador2;
 
@@ -43,7 +41,6 @@ public class Partida {
     public Partida() {
         this.estadoActual = EstadoTurno.ESPERANDO_JUGADOR_1;
 
-        // ✅ NUEVO: Crear mazo completo UNA SOLA VEZ
         Mazo mazoOriginal = new Mazo();
         for (int i = 0; i < mazoOriginal.getCantCartas(); i++) {
             mazoCompeto.add(mazoOriginal.getCarta(i));
@@ -64,11 +61,10 @@ public class Partida {
         System.out.println("[SERVIDOR] Mazo barajado y listo para repartir");
     }
 
-    public void inicializar(ZonaJuego zonaJug1, ZonaJuego zonaJug2, RivalBot bot,
+    public void inicializar(ZonaJuego zonaJug1, ZonaJuego zonaJug2,
                             Jugador jug1, Jugador jug2, int manoActual) {
         this.zonaJugador1 = zonaJug1;
         this.zonaJugador2 = zonaJug2;
-        this.rivalBot = bot;
         this.jugador1 = jug1;
         this.jugador2 = jug2;
 
@@ -271,7 +267,6 @@ public class Partida {
 
         return true;
     }
-
     public void resetearTotal() {
         System.out.println("[SERVIDOR] Realizando reseteo total de la partida...");
 

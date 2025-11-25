@@ -36,7 +36,7 @@ public class PantallaServidor implements Screen {
 
         // Inicializamos la lógica
         partidaLogica.repartirCartas(srvJ1, srvJ2);
-        partidaLogica.inicializar(zonaDummy1, zonaDummy2, null, srvJ1, srvJ2, 0);
+        partidaLogica.inicializar(zonaDummy1, zonaDummy2, srvJ1, srvJ2, 0);
 
         // 2. CREAMOS EL HILO Y LE PASAMOS LA PARTIDA LISTA
         hiloServidor = new HiloServidor(partidaLogica);
