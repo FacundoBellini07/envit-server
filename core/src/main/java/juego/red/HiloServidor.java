@@ -1,6 +1,7 @@
 package juego.red;
 
 import juego.elementos.Carta;
+import juego.elementos.EstadoTruco;
 import juego.elementos.EstadoTurno;
 import juego.elementos.Palo;
 import juego.pantallas.Partida;
@@ -40,7 +41,6 @@ public class HiloServidor extends Thread {
         }
     }
 
-    // ✅ NUEVO: Método para iniciar el checker
     private void iniciarCheckerDesconexiones() {
         if (timerDesconexiones != null) {
             timerDesconexiones.cancel();
@@ -165,6 +165,12 @@ public class HiloServidor extends Thread {
         else if (mensaje.equals("TRUCO")) {
             procesarTruco(dp);
         }
+        else if (mensaje.startsWith("QUIERO")) {
+            procesarRespuestaTruco(dp, "QUIERO");
+        }
+        else if (mensaje.startsWith("RETRUCO")) {
+            procesarRespuestaTruco(dp, "RETRUCO"); // O VALE_CUATRO, si lo incluyes aquí
+        }
     }
 
     private void procesarConexion(DatagramPacket dp) {
@@ -260,7 +266,7 @@ public class HiloServidor extends Thread {
     }
 
     private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
-        if (esperandoNuevaRonda) return;
+        if (esperandoNuevaRonda || partidaLogica.isTrucoPendiente()) return;
         String[] partes = mensaje.split(":");
         if (partes.length >= 3) {
             int valor = Integer.parseInt(partes[1]);
@@ -318,6 +324,28 @@ public class HiloServidor extends Thread {
             }
         }
     }
+    private void procesarRespuestaTruco(DatagramPacket dp, String tipoRespuesta) {
+        int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
+        TipoJugador jugadorRespuesta = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+        TipoJugador jugadorOponente = (jugadorRespuesta == TipoJugador.JUGADOR_1)
+                ? TipoJugador.JUGADOR_2 : TipoJugador.JUGADOR_1;
+
+        if (!partidaLogica.isTrucoPendiente()) return; // Ignorar si no hay truco pendiente
+
+        if (tipoRespuesta.equals("QUIERO")) {
+            partidaLogica.aceptarTruco(); // Desbloquea el juego
+            enviarAmbos("RESPUESTA_TRUCO:QUIERO"); // P1 recibe esto para desbloquear
+        }
+        else if (tipoRespuesta.equals("RETRUCO")) {
+            // P2 subió a RETRUCO
+            EstadoTruco siguiente = partidaLogica.getEstadoTruco().siguiente(); // TRUCO -> RETRUCO
+            partidaLogica.subirTruco(siguiente, jugadorRespuesta);
+            enviarAmbos("RESPUESTA_TRUCO:SUBIDA:" + siguiente.name()); // P1 recibe esto para mostrar opciones
+        }
+
+        // El control vuelve al jugador que era su turno o al que tiene que responder la nueva subida
+        enviarEstadoActual();
+    }
 
     private void iniciarNuevaRonda() {
         System.out.println("[SERVIDOR] Iniciando nueva ronda");
@@ -335,6 +363,7 @@ public class HiloServidor extends Thread {
     private void procesarTruco(DatagramPacket dp) {
         System.out.println("[SERVIDOR] TRUCO recibido");
 
+        // 1. Identificar quién cantó
         int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
         if (idx == -1) {
             System.out.println("[SERVIDOR] Cliente desconocido intentó cantar truco");
@@ -343,19 +372,27 @@ public class HiloServidor extends Thread {
 
         TipoJugador jugadorQueCanto = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
 
+        // 2. Validar en la lógica (esto actualiza el estado interno a TRUCO_CANTADO)
         boolean trucoValido = partidaLogica.cantarTruco(jugadorQueCanto);
 
         if (trucoValido) {
-            System.out.println("[SERVIDOR] ✅ TRUCO ACEPTADO");
 
+            System.out.println("[SERVIDOR] ✅ Truco válido. Esperando respuesta del rival...");
+
+            partidaLogica.setTrucoPendiente(true);
+
+            // B. Identificar al rival
             int rival = (idx == 0) ? 1 : 0;
+
+
             enviarMensaje(
                     "TRUCO_RIVAL",
                     clientes[rival].getIp(),
                     clientes[rival].getPuerto()
             );
 
-            enviarEstadoActual();
+
+
         } else {
             enviarEstadoActual();
         }
@@ -367,18 +404,25 @@ public class HiloServidor extends Thread {
         EstadoTurno estado = partidaLogica.getEstadoActual();
         String jugadorManoStr = partidaLogica.getJugadorMano().name();
 
+        // ✅ NUEVO: Enviar estado del truco completo
+        String estadoTrucoStr = partidaLogica.getEstadoTruco().name();
+        String ultimoCantoStr = (partidaLogica.getUltimoQueCanto() != null)
+                ? partidaLogica.getUltimoQueCanto().name()
+                : "null";
+
         String mensaje = "ESTADO:" +
                 partidaLogica.getManoActual() + ":" +
                 partidaLogica.getPuntosJ1() + ":" +
                 partidaLogica.getPuntosJ2() + ":" +
                 estado.name() + ":" +
                 jugadorManoStr + ":" +
-                (partidaLogica.isTrucoUsado() ? "1" : "0") + ":" +
-                partidaLogica.getManoTrucoUsada();
+                estadoTrucoStr + ":" +
+                partidaLogica.getManoTrucoUsada() + ":" +
+                ultimoCantoStr;
 
         enviarAmbos(mensaje);
 
-        System.out.println("[SERVIDOR] Estado enviado - Truco usado: " + partidaLogica.isTrucoUsado());
+        System.out.println("[SERVIDOR] Estado enviado - Truco: " + estadoTrucoStr);
     }
 
     private int getIndiceCliente(InetAddress ip, int puerto) {
