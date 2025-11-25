@@ -400,7 +400,6 @@ public class HiloServidor extends Thread {
     private void procesarTruco(DatagramPacket dp) {
         System.out.println("[SERVIDOR] ===== PROCESANDO TRUCO =====");
 
-        // 1. Identificar quién cantó
         int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
         if (idx == -1) {
             System.out.println("[SERVIDOR] ❌ Cliente desconocido intentó cantar truco");
@@ -411,13 +410,11 @@ public class HiloServidor extends Thread {
 
         System.out.println("[SERVIDOR] Jugador que cantó: " + jugadorQueCanto + " (Cliente " + idx + ")");
 
-        // 2. Validar en la lógica (esto actualiza el estado interno)
         boolean trucoValido = partidaLogica.cantarTruco(jugadorQueCanto);
 
         if (trucoValido) {
             System.out.println("[SERVIDOR] ✅ Truco válido aceptado");
 
-            // ✅ PASO 1: Notificar al rival que hay truco pendiente
             int rival = (idx == 0) ? 1 : 0;
             System.out.println("[SERVIDOR] Enviando TRUCO_RIVAL al cliente " + rival);
             enviarMensaje(
@@ -425,9 +422,6 @@ public class HiloServidor extends Thread {
                     clientes[rival].getIp(),
                     clientes[rival].getPuerto()
             );
-
-            // ✅ PASO 2: ENVIAR ESTADO ACTUALIZADO A AMBOS
-            // Esto es CRÍTICO para que el cliente que cantó sepa que su truco fue aceptado
             System.out.println("[SERVIDOR] Enviando estado actualizado a ambos clientes");
             enviarEstadoActual();
 
