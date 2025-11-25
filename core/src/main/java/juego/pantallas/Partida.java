@@ -34,7 +34,6 @@ public class Partida {
     private TipoJugador jugadorMano;
     private Random random = new Random();
 
-    // ✅ NUEVO: Sistema de Truco mejorado
     private EstadoTruco estadoTruco = EstadoTruco.SIN_TRUCO;
     private int manoTrucoUsada = -1;
     private TipoJugador ultimoQueCanto = null;
@@ -85,6 +84,7 @@ public class Partida {
         this.estadoTruco = EstadoTruco.SIN_TRUCO;
         this.manoTrucoUsada = -1;
         this.ultimoQueCanto = null;
+        this.trucoPendiente = false; // ✅ IMPORTANTE
     }
 
     public void repartirCartas(Jugador jugador1, Jugador jugador2) {
@@ -117,7 +117,6 @@ public class Partida {
 
     public void repartirNuevasCartas() {
         repartirCartas(jugador1, jugador2);
-        trucoPendiente = false;
         manoActual = 0;
         cartasJugador1Antes = 0;
         cartasJugador2Antes = 0;
@@ -139,7 +138,11 @@ public class Partida {
     }
 
     public void jugarCarta(TipoJugador jugadorQueJugo, Carta carta) {
-        if (ganador != null || trucoPendiente) return;
+        // ✅ BLOQUEAR SOLO SI HAY TRUCO PENDIENTE
+        if (ganador != null || trucoPendiente) {
+            System.out.println("[SERVIDOR] Carta bloqueada por trucoPendiente=" + trucoPendiente);
+            return;
+        }
 
         if (jugadorQueJugo == TipoJugador.JUGADOR_1) {
             zonaJugador1.agregarCarta(carta);
@@ -192,7 +195,6 @@ public class Partida {
         ArrayList<Carta> cartasJug1 = zonaJugador1.getCartasJugadas();
         ArrayList<Carta> cartasJug2 = zonaJugador2.getCartasJugadas();
 
-        // Validar para evitar crash si el índice es mayor a la cantidad de cartas jugadas
         if (cartasJug1.size() <= manoActual || cartasJug2.size() <= manoActual) {
             System.out.println("[SERVIDOR] Error: No hay cartas suficientes para evaluar mano " + manoActual);
             return;
@@ -201,7 +203,7 @@ public class Partida {
         Carta cartaJug1 = cartasJug1.get(manoActual);
         Carta cartaJug2 = cartasJug2.get(manoActual);
 
-        int resultadoMano = 0; // 1: Gana J1, 2: Gana J2, 3: Empate
+        int resultadoMano = 0;
 
         if (cartaJug1.getJerarquia() < cartaJug2.getJerarquia()) {
             resultadoMano = 1;
@@ -216,13 +218,13 @@ public class Partida {
 
         int puntosEnJuego = 1;
 
-        // Si estamos en la primera mano (índice 0), aplicamos el valor del Truco
         if (manoActual == 0) {
             puntosEnJuego = estadoTruco.getPuntos();
             System.out.println("[SERVIDOR] Puntos de la Mano 1/3 afectados por Truco: " + puntosEnJuego);
         } else {
             System.out.println("[SERVIDOR] Puntos de la Mano " + (manoActual + 1) + "/3: 1 (Valor Base)");
         }
+
         if (resultadoMano == 1) {
             jugador1.sumarPuntos(puntosEnJuego);
         } else if (resultadoMano == 2) {
@@ -230,56 +232,88 @@ public class Partida {
         }
     }
 
+    // ✅ CORRECCIÓN CRÍTICA DEL MÉTODO cantarTruco()
     public boolean cantarTruco(TipoJugador jugador) {
+        System.out.println("[SERVIDOR] cantarTruco() llamado por: " + jugador);
+        System.out.println("[SERVIDOR] Estado actual: estadoTruco=" + estadoTruco +
+                ", manoActual=" + manoActual +
+                ", trucoPendiente=" + trucoPendiente +
+                ", jugadorMano=" + jugadorMano +
+                ", ultimoQueCanto=" + ultimoQueCanto);
 
-        // 1. Validar si se puede subir más (No estamos en Vale 4)
-        if (!estadoTruco.puedeSubir()) return false;
-
-        // 2. Solo se puede cantar/responder en la primera mano (índice 0)
-        if (manoActual != 0) {
-            System.out.println("[SERVIDOR] Intento de truco fuera de mano 0");
+        // 1. Validar si se puede subir más
+        if (!estadoTruco.puedeSubir()) {
+            System.out.println("[SERVIDOR] ❌ No se puede subir más (ya estamos en Vale 4)");
             return false;
         }
 
+        // 2. Solo en la primera mano
+        if (manoActual != 0) {
+            System.out.println("[SERVIDOR] ❌ Intento de truco fuera de mano 0");
+            return false;
+        }
 
+        // 3. Lógica dividida: INICIAR vs RESPONDER
         if (estadoTruco == EstadoTruco.SIN_TRUCO) {
             // --- INICIAR TRUCO ---
-            if (jugador != jugadorMano) return false;
-            if (!esPrimerTurnoEnMano()) return false;
-
+            if (jugador != jugadorMano) {
+                System.out.println("[SERVIDOR] ❌ Solo el jugador mano puede iniciar truco");
+                return false;
+            }
+            if (!esPrimerTurnoEnMano()) {
+                System.out.println("[SERVIDOR] ❌ Ya se jugaron cartas, no se puede iniciar truco");
+                return false;
+            }
         } else {
-
-            if (ultimoQueCanto == jugador) return false;
+            // --- RESPONDER/SUBIR TRUCO ---
+            if (ultimoQueCanto == jugador) {
+                System.out.println("[SERVIDOR] ❌ No puedes responder tu propio canto");
+                return false;
+            }
         }
 
         // 4. Actualizar estado de Truco
+        EstadoTruco estadoAnterior = estadoTruco;
         estadoTruco = estadoTruco.siguiente();
         manoTrucoUsada = 0;
         ultimoQueCanto = jugador;
 
+        // ✅ CRÍTICO: MARCAR COMO PENDIENTE
+        trucoPendiente = true;
 
         String nombreJugador = (jugador == TipoJugador.JUGADOR_1)
                 ? jugador1.getNombre()
                 : jugador2.getNombre();
 
         System.out.println("[SERVIDOR] ✅ " + nombreJugador +
-                " CANTÓ " + estadoTruco + ". Turno de carta se mantiene en: " + estadoActual);
+                " CANTÓ " + estadoTruco + ". Esperando respuesta del rival...");
+        System.out.println("[SERVIDOR] trucoPendiente=true, estadoActual=" + estadoActual + " (NO CAMBIA)");
 
         return true;
     }
+
+    // ✅ MÉTODO MEJORADO
     public void aceptarTruco() {
-        this.trucoPendiente = false; // Desbloquea
-        // El EstadoTruco ya fue actualizado a TRUCO_CANTADO en cantarTruco()
-        // No se necesitan más cambios de estado aquí, solo desbloquear.
+        System.out.println("[SERVIDOR] Truco aceptado. Desbloqueando juego...");
+        this.trucoPendiente = false; // ✅ Desbloquea
+        // El estado del juego ya está correcto, solo desbloqueamos
     }
 
-    // ✅ NUEVO: Lógica cuando P2 responde Truco con RETRUCO (o lo que corresponda)
+    // ✅ MÉTODO MEJORADO
     public void subirTruco(EstadoTruco nuevoEstado, TipoJugador quienCanto) {
-        this.trucoPendiente = false; // Desbloquea
-        this.estadoTruco = nuevoEstado; // Sube a RETRUCO_CANTADO
-        this.ultimoQueCanto = quienCanto; // P2 ahora es el último en cantar
-        // Nota: Jugador 1 debe quedar con el turno para jugar carta
+        System.out.println("[SERVIDOR] Truco subido a: " + nuevoEstado + " por " + quienCanto);
+
+        // ✅ ACTUALIZAR ESTADO PERO MANTENER BLOQUEADO
+        this.estadoTruco = nuevoEstado;
+        this.ultimoQueCanto = quienCanto;
+        this.manoTrucoUsada = 0;
+
+        // ✅ MANTENER trucoPendiente=true porque ahora el OTRO jugador debe responder
+        // Se desbloqueará cuando ese jugador responda
+
+        System.out.println("[SERVIDOR] Esperando respuesta al " + nuevoEstado);
     }
+
     public void resetearTotal() {
         System.out.println("[SERVIDOR] Realizando reseteo total de la partida...");
 
@@ -313,53 +347,20 @@ public class Partida {
     }
 
     public boolean esPrimerTurnoEnMano() {
-        return cartasJugador1Antes == cartasJugador2Antes;
+        return cartasJugador1Antes == 0 && cartasJugador2Antes == 0;
     }
 
-    public int getManoActual() {
-        return manoActual;
-    }
-
-    public int getPuntosJ1() {
-        return jugador1.getPuntos();
-    }
-
-    public int getPuntosJ2() {
-        return jugador2.getPuntos();
-    }
-
-    public EstadoTurno getEstadoActual() {
-        return estadoActual;
-    }
-
-    public TipoJugador getJugadorMano() {
-        return jugadorMano;
-    }
-
-    public Jugador getGanador() {
-        return ganador;
-    }
-
-    public EstadoTruco getEstadoTruco() {
-        return estadoTruco;
-    }
-
-    public int getManoTrucoUsada() {
-        return manoTrucoUsada;
-    }
-
-    public TipoJugador getUltimoQueCanto() {
-        return ultimoQueCanto;
-    }
-
-    public Jugador getJugador1() {
-        return jugador1;
-    }
-    public boolean isTrucoPendiente() {
-        return trucoPendiente;
-    }
-
-    public void setTrucoPendiente(boolean pendiente) {
-        this.trucoPendiente = pendiente;
-    }
+    // Getters
+    public int getManoActual() { return manoActual; }
+    public int getPuntosJ1() { return jugador1.getPuntos(); }
+    public int getPuntosJ2() { return jugador2.getPuntos(); }
+    public EstadoTurno getEstadoActual() { return estadoActual; }
+    public TipoJugador getJugadorMano() { return jugadorMano; }
+    public Jugador getGanador() { return ganador; }
+    public EstadoTruco getEstadoTruco() { return estadoTruco; }
+    public int getManoTrucoUsada() { return manoTrucoUsada; }
+    public TipoJugador getUltimoQueCanto() { return ultimoQueCanto; }
+    public Jugador getJugador1() { return jugador1; }
+    public boolean isTrucoPendiente() { return trucoPendiente; }
+    public void setTrucoPendiente(boolean pendiente) { this.trucoPendiente = pendiente; }
 }

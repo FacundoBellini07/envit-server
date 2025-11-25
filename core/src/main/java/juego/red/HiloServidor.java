@@ -265,86 +265,123 @@ public class HiloServidor extends Thread {
         System.out.println("[SERVIDOR] Cartas enviadas a jugador " + idJugador + ": " + mensaje);
     }
 
-    private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
-        if (esperandoNuevaRonda || partidaLogica.isTrucoPendiente()) return;
-        String[] partes = mensaje.split(":");
-        if (partes.length >= 3) {
-            int valor = Integer.parseInt(partes[1]);
-            Palo palo = Palo.valueOf(partes[2]);
-
-            int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
-            if (idx == -1) return;
-
-            TipoJugador jugadorQueJugo = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
-
-            Carta cartaJugada = new Carta(valor, palo);
-
-            partidaLogica.jugarCarta(jugadorQueJugo, cartaJugada);
-
-            int rival = (idx == 0) ? 1 : 0;
-            enviarMensaje(
-                    "CARTA_RIVAL:" + valor + ":" + palo.name(),
-                    clientes[rival].getIp(),
-                    clientes[rival].getPuerto()
-            );
-
-            enviarEstadoActual();
-
-            // Si la partida terminó
-            if (partidaLogica.getEstadoActual() == EstadoTurno.PARTIDA_TERMINADA) {
-                Jugador ganador = partidaLogica.getGanador();
-                int idGanador = (ganador == partidaLogica.getJugador1()) ? 0 : 1;
-
-                System.out.println("[SERVIDOR] ¡PARTIDA TERMINADA! Ganó ID: " + idGanador);
-                enviarAmbos("GANADOR:" + idGanador);
-
-                // Esperar 3 segundos y vaciar la sala
-                new Timer().schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        vaciarSala();
-                    }
-                }, 3000);
-
-                partidaEnProgreso = false;
+        private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
+            // ✅ VERIFICAR BLOQUEO AL INICIO
+            if (esperandoNuevaRonda) {
+                System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: esperando nueva ronda");
+                return;
             }
-            // Si se completó una ronda (pero no la partida), iniciar nueva ronda
-            else if (partidaLogica.rondaCompletada()) {
-                System.out.println("[SERVIDOR] ¡Ronda completada! Esperando 2s para la siguiente...");
 
-                esperandoNuevaRonda = true;
-
-                new Timer().schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        iniciarNuevaRonda();
-                        esperandoNuevaRonda = false;
-                    }
-                }, 2000);
+            if (partidaLogica.isTrucoPendiente()) {
+                System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: hay truco pendiente de respuesta");
+                return;
             }
-        }
+
+            String[] partes = mensaje.split(":");
+            if (partes.length >= 3) {
+                int valor = Integer.parseInt(partes[1]);
+                Palo palo = Palo.valueOf(partes[2]);
+
+                int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
+                if (idx == -1) return;
+
+                TipoJugador jugadorQueJugo = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+
+                Carta cartaJugada = new Carta(valor, palo);
+
+                partidaLogica.jugarCarta(jugadorQueJugo, cartaJugada);
+
+                int rival = (idx == 0) ? 1 : 0;
+                enviarMensaje(
+                        "CARTA_RIVAL:" + valor + ":" + palo.name(),
+                        clientes[rival].getIp(),
+                        clientes[rival].getPuerto()
+                );
+
+                enviarEstadoActual();
+
+                if (partidaLogica.getEstadoActual() == EstadoTurno.PARTIDA_TERMINADA) {
+                    Jugador ganador = partidaLogica.getGanador();
+                    int idGanador = (ganador == partidaLogica.getJugador1()) ? 0 : 1;
+
+                    System.out.println("[SERVIDOR] ¡PARTIDA TERMINADA! Ganó ID: " + idGanador);
+                    enviarAmbos("GANADOR:" + idGanador);
+
+                    new Timer().schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            vaciarSala();
+                        }
+                    }, 3000);
+
+                    partidaEnProgreso = false;
+                }
+                else if (partidaLogica.rondaCompletada()) {
+                    System.out.println("[SERVIDOR] ¡Ronda completada! Esperando 2s para la siguiente...");
+
+                    esperandoNuevaRonda = true;
+
+                    new Timer().schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            iniciarNuevaRonda();
+                            esperandoNuevaRonda = false;
+                        }
+                    }, 2000);
+                }
+            }
     }
     private void procesarRespuestaTruco(DatagramPacket dp, String tipoRespuesta) {
-        int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
-        TipoJugador jugadorRespuesta = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
-        TipoJugador jugadorOponente = (jugadorRespuesta == TipoJugador.JUGADOR_1)
-                ? TipoJugador.JUGADOR_2 : TipoJugador.JUGADOR_1;
+        System.out.println("[SERVIDOR] ===== PROCESANDO RESPUESTA: " + tipoRespuesta + " =====");
 
-        if (!partidaLogica.isTrucoPendiente()) return; // Ignorar si no hay truco pendiente
+        int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
+        if (idx == -1) {
+            System.out.println("[SERVIDOR] ❌ Cliente desconocido");
+            return;
+        }
+
+        TipoJugador jugadorRespuesta = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+
+        System.out.println("[SERVIDOR] Respuesta de: " + jugadorRespuesta + " (Cliente " + idx + ")");
+
+        // ✅ VALIDAR que haya un truco pendiente
+        if (!partidaLogica.isTrucoPendiente()) {
+            System.out.println("[SERVIDOR] ⚠️ No hay truco pendiente, ignorando respuesta");
+            return;
+        }
 
         if (tipoRespuesta.equals("QUIERO")) {
-            partidaLogica.aceptarTruco(); // Desbloquea el juego
-            enviarAmbos("RESPUESTA_TRUCO:QUIERO"); // P1 recibe esto para desbloquear
-        }
-        else if (tipoRespuesta.equals("RETRUCO")) {
-            // P2 subió a RETRUCO
-            EstadoTruco siguiente = partidaLogica.getEstadoTruco().siguiente(); // TRUCO -> RETRUCO
-            partidaLogica.subirTruco(siguiente, jugadorRespuesta);
-            enviarAmbos("RESPUESTA_TRUCO:SUBIDA:" + siguiente.name()); // P1 recibe esto para mostrar opciones
-        }
+            System.out.println("[SERVIDOR] Jugador aceptó el truco (QUIERO)");
 
-        // El control vuelve al jugador que era su turno o al que tiene que responder la nueva subida
-        enviarEstadoActual();
+            // ✅ Desbloquear el juego
+            partidaLogica.aceptarTruco();
+
+            // ✅ Notificar a AMBOS que el truco fue aceptado
+            enviarAmbos("RESPUESTA_TRUCO:QUIERO");
+
+            // ✅ AHORA SÍ enviar el estado actualizado
+            enviarEstadoActual();
+
+            System.out.println("[SERVIDOR] Juego desbloqueado, ambos pueden jugar cartas");
+        }
+        else if (tipoRespuesta.equals("RETRUCO") || tipoRespuesta.equals("VALE_CUATRO")) {
+            // ✅ El jugador subió la apuesta
+            EstadoTruco estadoAnterior = partidaLogica.getEstadoTruco();
+            EstadoTruco nuevoEstado = estadoAnterior.siguiente();
+
+            System.out.println("[SERVIDOR] Jugador subió de " + estadoAnterior + " a " + nuevoEstado);
+
+            // ✅ Actualizar pero MANTENER bloqueado
+            partidaLogica.subirTruco(nuevoEstado, jugadorRespuesta);
+
+            // ✅ Notificar a AMBOS la subida
+            enviarAmbos("RESPUESTA_TRUCO:SUBIDA:" + nuevoEstado.name());
+
+            // ✅ Enviar estado actualizado (aún bloqueado, esperando nueva respuesta)
+            enviarEstadoActual();
+
+            System.out.println("[SERVIDOR] Esperando respuesta al " + nuevoEstado);
+        }
     }
 
     private void iniciarNuevaRonda() {
@@ -361,39 +398,41 @@ public class HiloServidor extends Thread {
     }
 
     private void procesarTruco(DatagramPacket dp) {
-        System.out.println("[SERVIDOR] TRUCO recibido");
+        System.out.println("[SERVIDOR] ===== PROCESANDO TRUCO =====");
 
         // 1. Identificar quién cantó
         int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
         if (idx == -1) {
-            System.out.println("[SERVIDOR] Cliente desconocido intentó cantar truco");
+            System.out.println("[SERVIDOR] ❌ Cliente desconocido intentó cantar truco");
             return;
         }
 
         TipoJugador jugadorQueCanto = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
 
-        // 2. Validar en la lógica (esto actualiza el estado interno a TRUCO_CANTADO)
+        System.out.println("[SERVIDOR] Jugador que cantó: " + jugadorQueCanto + " (Cliente " + idx + ")");
+
+        // 2. Validar en la lógica (esto actualiza el estado interno)
         boolean trucoValido = partidaLogica.cantarTruco(jugadorQueCanto);
 
         if (trucoValido) {
+            System.out.println("[SERVIDOR] ✅ Truco válido aceptado");
 
-            System.out.println("[SERVIDOR] ✅ Truco válido. Esperando respuesta del rival...");
-
-            partidaLogica.setTrucoPendiente(true);
-
-            // B. Identificar al rival
+            // ✅ NO ENVIAR ESTADO AQUÍ - Solo notificar al rival
             int rival = (idx == 0) ? 1 : 0;
 
-
+            System.out.println("[SERVIDOR] Enviando TRUCO_RIVAL al cliente " + rival);
             enviarMensaje(
                     "TRUCO_RIVAL",
                     clientes[rival].getIp(),
                     clientes[rival].getPuerto()
             );
 
-
+            // ✅ NO llamar a enviarEstadoActual() aquí
+            // El estado se enviará cuando el rival responda
 
         } else {
+            System.out.println("[SERVIDOR] ❌ Truco rechazado por validación");
+            // Solo enviar estado si fue rechazado
             enviarEstadoActual();
         }
     }
