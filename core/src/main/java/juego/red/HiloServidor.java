@@ -417,9 +417,8 @@ public class HiloServidor extends Thread {
         if (trucoValido) {
             System.out.println("[SERVIDOR] ✅ Truco válido aceptado");
 
-            // ✅ NO ENVIAR ESTADO AQUÍ - Solo notificar al rival
+            // ✅ PASO 1: Notificar al rival que hay truco pendiente
             int rival = (idx == 0) ? 1 : 0;
-
             System.out.println("[SERVIDOR] Enviando TRUCO_RIVAL al cliente " + rival);
             enviarMensaje(
                     "TRUCO_RIVAL",
@@ -427,8 +426,10 @@ public class HiloServidor extends Thread {
                     clientes[rival].getPuerto()
             );
 
-            // ✅ NO llamar a enviarEstadoActual() aquí
-            // El estado se enviará cuando el rival responda
+            // ✅ PASO 2: ENVIAR ESTADO ACTUALIZADO A AMBOS
+            // Esto es CRÍTICO para que el cliente que cantó sepa que su truco fue aceptado
+            System.out.println("[SERVIDOR] Enviando estado actualizado a ambos clientes");
+            enviarEstadoActual();
 
         } else {
             System.out.println("[SERVIDOR] ❌ Truco rechazado por validación");
