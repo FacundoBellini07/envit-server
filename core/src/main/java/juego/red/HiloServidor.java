@@ -410,20 +410,35 @@ public class HiloServidor extends Thread {
 
         System.out.println("[SERVIDOR] Jugador que cantó: " + jugadorQueCanto + " (Cliente " + idx + ")");
 
+        // 1. La lógica de partida actualiza el estado interno (e.g., a VALE_CUATRO_CANTADO)
         boolean trucoValido = partidaLogica.cantarTruco(jugadorQueCanto);
 
         if (trucoValido) {
             System.out.println("[SERVIDOR] ✅ Truco válido aceptado");
 
-            int rival = (idx == 0) ? 1 : 0;
-            System.out.println("[SERVIDOR] Enviando TRUCO_RIVAL al cliente " + rival);
-            enviarMensaje(
-                    "TRUCO_RIVAL",
-                    clientes[rival].getIp(),
-                    clientes[rival].getPuerto()
-            );
-            System.out.println("[SERVIDOR] Enviando estado actualizado a ambos clientes");
-            enviarEstadoActual();
+            // 2. 🚨 NUEVA LÓGICA: Comprobar si el nuevo estado es VALE 4
+            if (partidaLogica.getEstadoTruco() == EstadoTruco.VALE_CUATRO_CANTADO) {
+
+                System.out.println("[SERVIDOR] 🚨 ¡VALE 4 CANTADO! Asumiendo 'QUIERO' automático y pasando turno.");
+
+                partidaLogica.aceptarTruco();
+
+
+                enviarEstadoActual();
+
+            } else {
+                // Lógica para TRUCO o RETRUCO (donde SÍ se espera respuesta)
+
+                int rival = (idx == 0) ? 1 : 0;
+                System.out.println("[SERVIDOR] Enviando TRUCO_RIVAL al cliente " + rival);
+                enviarMensaje(
+                        "TRUCO_RIVAL",
+                        clientes[rival].getIp(),
+                        clientes[rival].getPuerto()
+                );
+                System.out.println("[SERVIDOR] Enviando estado actualizado (en espera de respuesta)");
+                enviarEstadoActual();
+            }
 
         } else {
             System.out.println("[SERVIDOR] ❌ Truco rechazado por validación");

@@ -231,8 +231,6 @@ public class Partida {
             jugador2.sumarPuntos(puntosEnJuego);
         }
     }
-
-    // ✅ CORRECCIÓN CRÍTICA DEL MÉTODO cantarTruco()
     public boolean cantarTruco(TipoJugador jugador) {
         System.out.println("[SERVIDOR] cantarTruco() llamado por: " + jugador);
         System.out.println("[SERVIDOR] Estado actual: estadoTruco=" + estadoTruco +
@@ -272,13 +270,11 @@ public class Partida {
             }
         }
 
-        // 4. Actualizar estado de Truco
         EstadoTruco estadoAnterior = estadoTruco;
         estadoTruco = estadoTruco.siguiente();
         manoTrucoUsada = 0;
         ultimoQueCanto = jugador;
 
-        // ✅ CRÍTICO: MARCAR COMO PENDIENTE
         trucoPendiente = true;
 
         String nombreJugador = (jugador == TipoJugador.JUGADOR_1)
@@ -292,11 +288,9 @@ public class Partida {
         return true;
     }
 
-    // ✅ MÉTODO MEJORADO
     public void aceptarTruco() {
         System.out.println("[SERVIDOR] Truco aceptado. Desbloqueando juego...");
-        this.trucoPendiente = false; // ✅ Desbloquea
-        // El estado del juego ya está correcto, solo desbloqueamos
+        this.trucoPendiente = false;
     }
 
     // ✅ MÉTODO MEJORADO
