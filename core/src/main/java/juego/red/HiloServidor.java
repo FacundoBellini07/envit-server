@@ -26,6 +26,8 @@ public class HiloServidor extends Thread {
 
     // ✅ NUEVO: Timer para el checker de desconexiones
     private Timer timerDesconexiones;
+    private Timer timerPinger;
+    private final long PING_INTERVAL = 2000;
 
     public HiloServidor(Partida partida) {
         this.partidaLogica = partida;
@@ -35,6 +37,7 @@ public class HiloServidor extends Thread {
 
             // Detector de desconexiones forzadas
             iniciarCheckerDesconexiones();
+            iniciarPinger();
 
         } catch (SocketException e) {
             e.printStackTrace();
@@ -158,17 +161,13 @@ public class HiloServidor extends Thread {
 
         if (mensaje.equals("Conexion")) {
             procesarConexion(dp);
-        }
-        else if (mensaje.startsWith("CARTA_JUGADA:")) {
+        } else if (mensaje.startsWith("CARTA_JUGADA:")) {
             procesarCartaJugada(dp, mensaje);
-        }
-        else if (mensaje.equals("TRUCO")) {
+        } else if (mensaje.equals("TRUCO")) {
             procesarTruco(dp);
-        }
-        else if (mensaje.startsWith("QUIERO")) {
+        } else if (mensaje.startsWith("QUIERO")) {
             procesarRespuestaTruco(dp, "QUIERO");
-        }
-        else if (mensaje.startsWith("RETRUCO")) {
+        } else if (mensaje.startsWith("RETRUCO")) {
             procesarRespuestaTruco(dp, "RETRUCO"); // O VALE_CUATRO, si lo incluyes aquí
         }
     }
@@ -265,72 +264,72 @@ public class HiloServidor extends Thread {
         System.out.println("[SERVIDOR] Cartas enviadas a jugador " + idJugador + ": " + mensaje);
     }
 
-        private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
-            // ✅ VERIFICAR BLOQUEO AL INICIO
-            if (esperandoNuevaRonda) {
-                System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: esperando nueva ronda");
-                return;
+    private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
+        // ✅ VERIFICAR BLOQUEO AL INICIO
+        if (esperandoNuevaRonda) {
+            System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: esperando nueva ronda");
+            return;
+        }
+
+        if (partidaLogica.isTrucoPendiente()) {
+            System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: hay truco pendiente de respuesta");
+            return;
+        }
+
+        String[] partes = mensaje.split(":");
+        if (partes.length >= 3) {
+            int valor = Integer.parseInt(partes[1]);
+            Palo palo = Palo.valueOf(partes[2]);
+
+            int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
+            if (idx == -1) return;
+
+            TipoJugador jugadorQueJugo = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
+
+            Carta cartaJugada = new Carta(valor, palo);
+
+            partidaLogica.jugarCarta(jugadorQueJugo, cartaJugada);
+
+            int rival = (idx == 0) ? 1 : 0;
+            enviarMensaje(
+                    "CARTA_RIVAL:" + valor + ":" + palo.name(),
+                    clientes[rival].getIp(),
+                    clientes[rival].getPuerto()
+            );
+
+            enviarEstadoActual();
+
+            if (partidaLogica.getEstadoActual() == EstadoTurno.PARTIDA_TERMINADA) {
+                Jugador ganador = partidaLogica.getGanador();
+                int idGanador = (ganador == partidaLogica.getJugador1()) ? 0 : 1;
+
+                System.out.println("[SERVIDOR] ¡PARTIDA TERMINADA! Ganó ID: " + idGanador);
+                enviarAmbos("GANADOR:" + idGanador);
+
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        vaciarSala();
+                    }
+                }, 3000);
+
+                partidaEnProgreso = false;
+            } else if (partidaLogica.rondaCompletada()) {
+                System.out.println("[SERVIDOR] ¡Ronda completada! Esperando 2s para la siguiente...");
+
+                esperandoNuevaRonda = true;
+
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        iniciarNuevaRonda();
+                        esperandoNuevaRonda = false;
+                    }
+                }, 2000);
             }
-
-            if (partidaLogica.isTrucoPendiente()) {
-                System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: hay truco pendiente de respuesta");
-                return;
-            }
-
-            String[] partes = mensaje.split(":");
-            if (partes.length >= 3) {
-                int valor = Integer.parseInt(partes[1]);
-                Palo palo = Palo.valueOf(partes[2]);
-
-                int idx = getIndiceCliente(dp.getAddress(), dp.getPort());
-                if (idx == -1) return;
-
-                TipoJugador jugadorQueJugo = (idx == 0) ? TipoJugador.JUGADOR_1 : TipoJugador.JUGADOR_2;
-
-                Carta cartaJugada = new Carta(valor, palo);
-
-                partidaLogica.jugarCarta(jugadorQueJugo, cartaJugada);
-
-                int rival = (idx == 0) ? 1 : 0;
-                enviarMensaje(
-                        "CARTA_RIVAL:" + valor + ":" + palo.name(),
-                        clientes[rival].getIp(),
-                        clientes[rival].getPuerto()
-                );
-
-                enviarEstadoActual();
-
-                if (partidaLogica.getEstadoActual() == EstadoTurno.PARTIDA_TERMINADA) {
-                    Jugador ganador = partidaLogica.getGanador();
-                    int idGanador = (ganador == partidaLogica.getJugador1()) ? 0 : 1;
-
-                    System.out.println("[SERVIDOR] ¡PARTIDA TERMINADA! Ganó ID: " + idGanador);
-                    enviarAmbos("GANADOR:" + idGanador);
-
-                    new Timer().schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            vaciarSala();
-                        }
-                    }, 3000);
-
-                    partidaEnProgreso = false;
-                }
-                else if (partidaLogica.rondaCompletada()) {
-                    System.out.println("[SERVIDOR] ¡Ronda completada! Esperando 2s para la siguiente...");
-
-                    esperandoNuevaRonda = true;
-
-                    new Timer().schedule(new TimerTask() {
-                        @Override
-                        public void run() {
-                            iniciarNuevaRonda();
-                            esperandoNuevaRonda = false;
-                        }
-                    }, 2000);
-                }
-            }
+        }
     }
+
     private void procesarRespuestaTruco(DatagramPacket dp, String tipoRespuesta) {
         System.out.println("[SERVIDOR] ===== PROCESANDO RESPUESTA: " + tipoRespuesta + " =====");
 
@@ -363,8 +362,7 @@ public class HiloServidor extends Thread {
             enviarEstadoActual();
 
             System.out.println("[SERVIDOR] Juego desbloqueado, ambos pueden jugar cartas");
-        }
-        else if (tipoRespuesta.equals("RETRUCO") || tipoRespuesta.equals("VALE_CUATRO")) {
+        } else if (tipoRespuesta.equals("RETRUCO") || tipoRespuesta.equals("VALE_CUATRO")) {
             // ✅ El jugador subió la apuesta
             EstadoTruco estadoAnterior = partidaLogica.getEstadoTruco();
             EstadoTruco nuevoEstado = estadoAnterior.siguiente();
@@ -483,11 +481,34 @@ public class HiloServidor extends Thread {
         return -1;
     }
 
+    private void iniciarPinger() {
+        timerPinger = new Timer();
+        timerPinger.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                // Solo enviamos PING si hay 2 clientes conectados para evitar spam
+                if (cantClientes == 2) {
+                    System.out.println("[SERVIDOR] 📡 Enviando PING a clientes.");
+                    enviarAmbos("PING");
+                }
+            }
+        }, PING_INTERVAL, PING_INTERVAL);
+    }
+
+    private void detenerPinger() {
+        if (timerPinger != null) {
+            timerPinger.cancel();
+            timerPinger = null;
+        }
+    }
+
     public void detener() {
         fin = true;
+        detenerPinger();
         detenerCheckerDesconexiones();
         if (conexion != null && !conexion.isClosed()) {
             conexion.close();
+            System.out.println("[SERVIDOR] Conexión UDP cerrada.");
         }
     }
 }
