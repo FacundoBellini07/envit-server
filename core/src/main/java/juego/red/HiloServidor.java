@@ -164,15 +164,16 @@ public class HiloServidor extends Thread {
         } else if (mensaje.startsWith("QUIERO")) {
             procesarRespuestaTruco(dp, "QUIERO");
         } else if (mensaje.startsWith("RETRUCO")) {
-            procesarRespuestaTruco(dp, "RETRUCO"); // O VALE_CUATRO, si lo incluyes aquí
+            procesarRespuestaTruco(dp, "RETRUCO");
+        }
+        else if (mensaje.startsWith("VALE_CUATRO")) {
+            procesarRespuestaTruco(dp, "VALE_CUATRO");
         }
     }
 
     private void procesarConexion(DatagramPacket dp) {
         // Si hay espacio, aceptamos
         if (cantClientes < 2) {
-            // ✅ IMPORTANTE: Verificar si el cliente ya existe (por IP/Puerto) para no duplicarlo
-            // aunque con vaciarSala() esto es raro, es buena práctica.
             int idxExistente = getIndiceCliente(dp.getAddress(), dp.getPort());
 
             if (idxExistente != -1) {
@@ -339,7 +340,6 @@ public class HiloServidor extends Thread {
 
         System.out.println("[SERVIDOR] Respuesta de: " + jugadorRespuesta + " (Cliente " + idx + ")");
 
-        // ✅ VALIDAR que haya un truco pendiente
         if (!partidaLogica.isTrucoPendiente()) {
             System.out.println("[SERVIDOR] ⚠️ No hay truco pendiente, ignorando respuesta");
             return;
@@ -347,34 +347,36 @@ public class HiloServidor extends Thread {
 
         if (tipoRespuesta.equals("QUIERO")) {
             System.out.println("[SERVIDOR] Jugador aceptó el truco (QUIERO)");
-
-            // ✅ Desbloquear el juego
             partidaLogica.aceptarTruco();
-
-            // ✅ Notificar a AMBOS que el truco fue aceptado
             enviarAmbos("RESPUESTA_TRUCO:QUIERO");
-
-            // ✅ AHORA SÍ enviar el estado actualizado
             enviarEstadoActual();
-
             System.out.println("[SERVIDOR] Juego desbloqueado, ambos pueden jugar cartas");
+
         } else if (tipoRespuesta.equals("RETRUCO") || tipoRespuesta.equals("VALE_CUATRO")) {
-            // ✅ El jugador subió la apuesta
             EstadoTruco estadoAnterior = partidaLogica.getEstadoTruco();
             EstadoTruco nuevoEstado = estadoAnterior.siguiente();
 
             System.out.println("[SERVIDOR] Jugador subió de " + estadoAnterior + " a " + nuevoEstado);
 
-            // ✅ Actualizar pero MANTENER bloqueado
             partidaLogica.subirTruco(nuevoEstado, jugadorRespuesta);
 
-            // ✅ Notificar a AMBOS la subida
+            // 1. Informar la subida a los clientes (para que actualicen el cartel visual)
             enviarAmbos("RESPUESTA_TRUCO:SUBIDA:" + nuevoEstado.name());
-
-            // ✅ Enviar estado actualizado (aún bloqueado, esperando nueva respuesta)
             enviarEstadoActual();
 
-            System.out.println("[SERVIDOR] Esperando respuesta al " + nuevoEstado);
+            if (nuevoEstado == EstadoTruco.VALE_CUATRO_CANTADO) {
+                System.out.println("[SERVIDOR] 🚨 VALE 4 (Respuesta) -> Auto-aceptando para desbloquear juego.");
+
+                // Aceptamos el truco en la lógica (pone trucoPendiente = false)
+                partidaLogica.aceptarTruco();
+
+                // Enviamos el QUIERO para que los clientes sepan que está aceptado y desbloqueen sus cartas
+                enviarAmbos("RESPUESTA_TRUCO:QUIERO");
+                enviarEstadoActual();
+
+            } else {
+                System.out.println("[SERVIDOR] Esperando respuesta al " + nuevoEstado);
+            }
         }
     }
 
