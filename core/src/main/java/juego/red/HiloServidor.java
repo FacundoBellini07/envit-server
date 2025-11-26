@@ -24,7 +24,6 @@ public class HiloServidor extends Thread {
 
     private boolean partidaEnProgreso = false;
 
-    // ✅ NUEVO: Timer para el checker de desconexiones
     private Timer timerDesconexiones;
     private Timer timerPinger;
     private final long PING_INTERVAL = 2000;
@@ -49,7 +48,7 @@ public class HiloServidor extends Thread {
             timerDesconexiones.cancel();
         }
 
-        timerDesconexiones = new Timer();
+        timerDesconexiones = new Timer(true);
         timerDesconexiones.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
@@ -58,7 +57,6 @@ public class HiloServidor extends Thread {
         }, 2000, 1000);
     }
 
-    // ✅ NUEVO: Método para detener el checker
     private void detenerCheckerDesconexiones() {
         if (timerDesconexiones != null) {
             timerDesconexiones.cancel();
@@ -104,30 +102,28 @@ public class HiloServidor extends Thread {
     }
 
     private void chequearDesconexiones() {
-        if (cantClientes == 0) return;
+
+        int clientesActuales = cantClientes;
+        Cliente[] copiaClientes = clientes.clone();
+
+        if (clientesActuales == 0) return;
+
         long tiempoActual = System.currentTimeMillis();
         final long TIEMPO_LIMITE = 3000;
 
-        for (int i = 0; i < cantClientes; i++) {
-            Cliente cliente = clientes[i];
-            if (cliente != null) {
-                if (tiempoActual - cliente.getUltimoMensaje() > TIEMPO_LIMITE) {
-                    System.out.println("[SERVIDOR] 🚨 Cliente " + i + " ha excedido el tiempo de espera (TIMEOUT).");
+        for (int i = 0; i < clientesActuales; i++) {
+            Cliente cliente = copiaClientes[i];
+            if (cliente == null) continue; // ✅ Protección adicional
 
-                    // ✅ Si está EN PROGRESO: desconectar a AMBOS y vaciar
-                    if (partidaEnProgreso) {
-                        System.out.println("[SERVIDOR] ⚠️ Partida en progreso. Enviando RIVAL_SE_FUE a ambos y vaciando sala.");
-                        enviarAmbos("RIVAL_SE_FUE");
-                        vaciarSala();
-                        return;
-                    }
-                    // ✅ Si NO está en progreso: solo vaciar sin enviar mensaje
-                    else {
-                        System.out.println("[SERVIDOR] Partida no en progreso. Solo vaciando sala.");
-                        vaciarSala();
-                        return;
-                    }
+            if (tiempoActual - cliente.getUltimoMensaje() > TIEMPO_LIMITE) {
+                System.out.println("[SERVIDOR] 🚨 Cliente " + i + " timeout");
+
+                if (partidaEnProgreso) {
+                    enviarAmbos("RIVAL_SE_FUE");
                 }
+
+                vaciarSala();
+                return; // ✅ Salir inmediatamente
             }
         }
     }
@@ -482,7 +478,7 @@ public class HiloServidor extends Thread {
     }
 
     private void iniciarPinger() {
-        timerPinger = new Timer();
+        timerPinger = new Timer(true);
         timerPinger.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
@@ -508,7 +504,6 @@ public class HiloServidor extends Thread {
         detenerCheckerDesconexiones();
         if (conexion != null && !conexion.isClosed()) {
             conexion.close();
-            System.out.println("[SERVIDOR] Conexión UDP cerrada.");
         }
     }
 }
