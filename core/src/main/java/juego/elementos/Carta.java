@@ -60,11 +60,6 @@ public class Carta {
         this.limites = new Rectangle(0, 0, cartaW, cartaH);
     }
 
-    Carta(int valor, Palo palo, int jerarquia) {
-        this.valor = valor;
-        this.palo = palo;
-        this.jerarquia = jerarquia;
-    }
 
     public void draw(SpriteBatch batch, float x, float y, float width, float height) {
         batch.draw(this.region, x, y, width, height);
@@ -144,7 +139,6 @@ public class Carta {
         this.jerarquia = 15;
     }
 
-    // ✅ NUEVO: equals y hashCode para comparar cartas correctamente
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;
@@ -153,12 +147,6 @@ public class Carta {
         return valor == carta.valor && palo == carta.palo;
     }
 
-    @Override
-    public int hashCode() {
-        int result = valor;
-        result = 31 * result + (palo != null ? palo.hashCode() : 0);
-        return result;
-    }
 
     public void updateLimites(float x, float y, float width, float height) {
         this.limites.set(x, y, width, height);

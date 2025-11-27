@@ -34,7 +34,6 @@ public class HiloServidor extends Thread {
             conexion = new DatagramSocket(30243);
             System.out.println("[SERVIDOR] Escuchando en puerto 30243");
 
-            // Detector de desconexiones forzadas
             iniciarCheckerDesconexiones();
             iniciarPinger();
 
@@ -85,16 +84,13 @@ public class HiloServidor extends Thread {
     private void vaciarSala() {
         System.out.println("[SERVIDOR] Vaciando sala...");
 
-        // 1. Primero detenemos el juego para evitar que el timer actual mate a alguien
         partidaEnProgreso = false;
         esperandoNuevaRonda = false;
 
-        // 2. Reseteamos datos
         cantClientes = 0;
-        clientes = new Cliente[2]; // Borra referencias a clientes viejos
+        clientes = new Cliente[2];
         partidaLogica.resetearTotal();
 
-        // 3. Reiniciar el checker de desconexiones DESDE CERO
         detenerCheckerDesconexiones();
         iniciarCheckerDesconexiones();
 
@@ -123,7 +119,7 @@ public class HiloServidor extends Thread {
                 }
 
                 vaciarSala();
-                return; // ✅ Salir inmediatamente
+                return;
             }
         }
     }
@@ -172,12 +168,11 @@ public class HiloServidor extends Thread {
     }
 
     private void procesarConexion(DatagramPacket dp) {
-        // Si hay espacio, aceptamos
         if (cantClientes < 2) {
             int idxExistente = getIndiceCliente(dp.getAddress(), dp.getPort());
 
             if (idxExistente != -1) {
-                // Si ya existe (spam de conexión), solo reenviamos el OK pero no agregamos uno nuevo
+
                 System.out.println("[SERVIDOR] Cliente ya conectado, reenviando OK.");
                 enviarMensaje("OK", clientes[idxExistente].getIp(), clientes[idxExistente].getPuerto());
                 enviarMensaje("ID:" + idxExistente, clientes[idxExistente].getIp(), clientes[idxExistente].getPuerto());
@@ -185,7 +180,7 @@ public class HiloServidor extends Thread {
             }
 
             clientes[cantClientes] = new Cliente(dp.getAddress(), dp.getPort());
-            // Asegurar que el timestamp inicial es AHORA MISMO
+
             clientes[cantClientes].actualizarUltimoMensaje();
 
             int idx = cantClientes;
@@ -197,7 +192,7 @@ public class HiloServidor extends Thread {
             System.out.println("[SERVIDOR] Jugador " + idx + " conectado. Total: " + cantClientes + "/2");
 
             if (cantClientes == 2 && !partidaEnProgreso) {
-                // Pequeña pausa antes de iniciar para asegurar que ambos clientes procesaron el "OK"
+
                 new Timer().schedule(new TimerTask() {
                     @Override
                     public void run() {
@@ -262,7 +257,7 @@ public class HiloServidor extends Thread {
     }
 
     private void procesarCartaJugada(DatagramPacket dp, String mensaje) {
-        // ✅ VERIFICAR BLOQUEO AL INICIO
+
         if (esperandoNuevaRonda) {
             System.out.println("[SERVIDOR] ⏸️ Carta bloqueada: esperando nueva ronda");
             return;
@@ -360,17 +355,14 @@ public class HiloServidor extends Thread {
 
             partidaLogica.subirTruco(nuevoEstado, jugadorRespuesta);
 
-            // 1. Informar la subida a los clientes (para que actualicen el cartel visual)
             enviarAmbos("RESPUESTA_TRUCO:SUBIDA:" + nuevoEstado.name());
             enviarEstadoActual();
 
             if (nuevoEstado == EstadoTruco.VALE_CUATRO_CANTADO) {
                 System.out.println("[SERVIDOR] 🚨 VALE 4 (Respuesta) -> Auto-aceptando para desbloquear juego.");
 
-                // Aceptamos el truco en la lógica (pone trucoPendiente = false)
                 partidaLogica.aceptarTruco();
 
-                // Enviamos el QUIERO para que los clientes sepan que está aceptado y desbloqueen sus cartas
                 enviarAmbos("RESPUESTA_TRUCO:QUIERO");
                 enviarEstadoActual();
 
@@ -419,7 +411,6 @@ public class HiloServidor extends Thread {
 
                 enviarAmbos("RESPUESTA_TRUCO:QUIERO");
 
-                // 3. Enviar estado actualizado
                 enviarEstadoActual();
 
                 System.out.println("[SERVIDOR] Vale 4 aceptado, juego desbloqueado");
@@ -449,7 +440,6 @@ public class HiloServidor extends Thread {
         EstadoTurno estado = partidaLogica.getEstadoActual();
         String jugadorManoStr = partidaLogica.getJugadorMano().name();
 
-        // ✅ NUEVO: Enviar estado del truco completo
         String estadoTrucoStr = partidaLogica.getEstadoTruco().name();
         String ultimoCantoStr = (partidaLogica.getUltimoQueCanto() != null)
                 ? partidaLogica.getUltimoQueCanto().name()

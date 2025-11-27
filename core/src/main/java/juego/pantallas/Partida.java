@@ -84,7 +84,7 @@ public class Partida {
         this.estadoTruco = EstadoTruco.SIN_TRUCO;
         this.manoTrucoUsada = -1;
         this.ultimoQueCanto = null;
-        this.trucoPendiente = false; // ✅ IMPORTANTE
+        this.trucoPendiente = false;
     }
 
     public void repartirCartas(Jugador jugador1, Jugador jugador2) {
@@ -138,7 +138,6 @@ public class Partida {
     }
 
     public void jugarCarta(TipoJugador jugadorQueJugo, Carta carta) {
-        // ✅ BLOQUEAR SOLO SI HAY TRUCO PENDIENTE
         if (ganador != null || trucoPendiente) {
             System.out.println("[SERVIDOR] Carta bloqueada por trucoPendiente=" + trucoPendiente);
             return;
@@ -239,21 +238,17 @@ public class Partida {
                 ", jugadorMano=" + jugadorMano +
                 ", ultimoQueCanto=" + ultimoQueCanto);
 
-        // 1. Validar si se puede subir más
         if (!estadoTruco.puedeSubir()) {
             System.out.println("[SERVIDOR] ❌ No se puede subir más (ya estamos en Vale 4)");
             return false;
         }
 
-        // 2. Solo en la primera mano
         if (manoActual != 0) {
             System.out.println("[SERVIDOR] ❌ Intento de truco fuera de mano 0");
             return false;
         }
 
-        // 3. Lógica dividida: INICIAR vs RESPONDER
         if (estadoTruco == EstadoTruco.SIN_TRUCO) {
-            // --- INICIAR TRUCO ---
             if (jugador != jugadorMano) {
                 System.out.println("[SERVIDOR] ❌ Solo el jugador mano puede iniciar truco");
                 return false;
@@ -263,7 +258,6 @@ public class Partida {
                 return false;
             }
         } else {
-            // --- RESPONDER/SUBIR TRUCO ---
             if (ultimoQueCanto == jugador) {
                 System.out.println("[SERVIDOR] ❌ No puedes responder tu propio canto");
                 return false;
@@ -293,17 +287,11 @@ public class Partida {
         this.trucoPendiente = false;
     }
 
-    // ✅ MÉTODO MEJORADO
     public void subirTruco(EstadoTruco nuevoEstado, TipoJugador quienCanto) {
         System.out.println("[SERVIDOR] Truco subido a: " + nuevoEstado + " por " + quienCanto);
-
-        // ✅ ACTUALIZAR ESTADO PERO MANTENER BLOQUEADO
         this.estadoTruco = nuevoEstado;
         this.ultimoQueCanto = quienCanto;
         this.manoTrucoUsada = 0;
-
-        // ✅ MANTENER trucoPendiente=true porque ahora el OTRO jugador debe responder
-        // Se desbloqueará cuando ese jugador responda
 
         System.out.println("[SERVIDOR] Esperando respuesta al " + nuevoEstado);
     }
